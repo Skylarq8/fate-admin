@@ -34,7 +34,7 @@ export default function ProductsPage() {
   const formatPrice = (n: number) => new Intl.NumberFormat("mn-MN").format(n) + "₮"
 
   return (
-    <div className="p-4 md:p-6">
+    <div className="py-4 px-1 md:p-6">
       {/* Header */}
       <div className="flex justify-between items-center mb-4 md:mb-6">
         <h1 className="text-xl md:text-2xl font-bold text-white">Products</h1>
@@ -48,6 +48,7 @@ export default function ProductsPage() {
       ) : (
         <>
           {/* Desktop table */}
+          <div className="text-white/40 text-sm pb-2">Нийт {products.length} бараа байна.</div>
           <div className="hidden md:block rounded-xl border border-slate-700 overflow-hidden">
             <table className="w-full text-sm text-white">
               <thead className="bg-slate-800 text-white/50 text-xs uppercase">
