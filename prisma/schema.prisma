@@ -1,0 +1,123 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum ProductStatus {
+  active
+  inactive
+}
+
+enum OrderStatus {
+  pending
+  confirmed
+  delivered
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products  ProductCategory[]
+}
+
+model Product {
+  id              String        @id @default(cuid())
+  title           String
+  description     String
+  price           Float
+  finalPrice      Float?
+  discountEnabled Boolean       @default(false)
+  discountEndsAt  DateTime?
+  sizes           String[]
+  colors          String[]
+  status          ProductStatus @default(active)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  images      ProductImage[]
+  categories  ProductCategory[]
+  orderItems  OrderItem[]
+  coupons     CouponProduct[]
+}
+
+model ProductImage {
+  id        String   @id @default(cuid())
+  url       String
+  publicId  String
+  isPrimary Boolean  @default(false)
+  order     Int      @default(0)
+  productId String
+  createdAt DateTime @default(now())
+
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model ProductCategory {
+  productId  String
+  categoryId String
+
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([productId, categoryId])
+}
+
+model Order {
+  id              String      @id @default(cuid())
+  customerName    String
+  phone           String
+  email           String
+  shippingAddress String
+  totalAmount     Float
+  status          OrderStatus @default(pending)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  items       OrderItem[]
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  productId String
+  size      String?
+  color     String?
+  quantity  Int     @default(1)
+  unitPrice Float
+
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id])
+}
+
+model Coupon {
+  id              String    @id @default(cuid())
+  code            String    @unique
+  discountPercent Float?
+  discountAmount  Float?
+  applyToAll      Boolean   @default(false)
+  expiresAt       DateTime
+  active          Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  products    CouponProduct[]
+}
+
+model CouponProduct {
+  couponId  String
+  productId String
+
+  coupon    Coupon  @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([couponId, productId])
+}
