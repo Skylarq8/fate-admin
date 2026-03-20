@@ -11,6 +11,15 @@ export async function GET(req: NextRequest) {
   const status = searchParams.get("status");
   const search = searchParams.get("search");
 
+  // Хугацаа дууссан хямдралуудыг автоматаар унтраана
+  await prisma.product.updateMany({
+    where: {
+      discountEnabled: true,
+      discountEndsAt:  { lt: new Date() },
+    },
+    data: { discountEnabled: false },
+  });
+
   const products = await prisma.product.findMany({
     where: {
       ...(status ? { status: status as "active" | "inactive" } : {}),
