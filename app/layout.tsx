@@ -20,6 +20,11 @@ const manrope = Manrope({
   variable: '--font-manrope',
 })
 
+export const metadata: Metadata = {
+  title: "FATE-ADMIN",
+  description: "FATE-ADMIN",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
