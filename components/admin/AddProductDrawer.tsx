@@ -149,7 +149,7 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
             {/* Description */}
             <div className="space-y-2">
               <Label>Description</Label>
-              <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Description" />
+              <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Description"/>
             </div>
 
             {/* Categories */}
