@@ -1,7 +1,7 @@
 // 📁 components/admin/AddProductDrawer.tsx
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -47,10 +47,16 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
   const [variants, setVariants] = useState<{ label: string; values: string[] }[]>([])
 
   // image color mapping
-  const [imageColors, setImageColors] = useState<Record<number, string>>({})
+  const [imageColors, setImageColors] = useState<{ [color: string]: number }>({})
 
   // primary image index
   const [primaryIndex, setPrimaryIndex] = useState(0)
+
+  useEffect(() => {
+    // Хэрэв ямар нэг color-д зураг тохируулагдсан бол тэрийг primary болгох
+    const color = colors.find(c => imageColors[c] !== undefined)
+    if (color) setPrimaryIndex(imageColors[color])
+  }, [imageColors, colors])
 
 
   const getCategoryLabel = (cat: Category): string => {
@@ -112,7 +118,12 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
     formData.append("colors",          JSON.stringify(colors))
     formData.append("variants", JSON.stringify(variants))
     formData.append("categories",      JSON.stringify(selectedCategories))
-    images.forEach(img => formData.append("images", img))
+    images.forEach((img, i) => {
+      const colorForImage = Object.entries(imageColors).find(([col, idx]) => idx === i)?.[0] || null
+      formData.append("images", img)
+      formData.append("imageColors", JSON.stringify({ url: img.name, color: colorForImage })) // эсвэл index
+    })
+    formData.append("primaryIndex", String(primaryIndex))
     if (discountEnabled) {
       formData.append("finalPrice",     String(parsePrice(finalPrice)))
       formData.append("discountEndsAt", new Date(discountEndsAt).toISOString())
@@ -176,9 +187,13 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
                     {colors.length > 0 && (
                       <select
                         value={imageColors[i] || ""}
-                        onChange={e =>
-                          setImageColors(prev => ({ ...prev, [i]: e.target.value }))
-                        }
+                        onChange={e => {
+                          const color = e.target.value
+                          setImageColors(prev => ({
+                            ...prev,
+                            [color]: i
+                          }))
+                        }}
                         className="absolute bottom-1 left-1 right-1 text-[10px] bg-black/70 text-white rounded px-1 py-0.5"
                       >
                         <option value="">No color</option>

@@ -76,12 +76,25 @@ export async function POST(req: NextRequest) {
     const imageFiles = formData.getAll("images") as File[];
     if (!imageFiles.length) return fail("Дор хаяж 1 зураг оруулна уу.");
 
+    const imageColors: Record<string, number> = JSON.parse(formData.get("imageColors") as string || "{}");
+    const primaryIndex = parseInt(formData.get("primaryIndex") as string || "0", 10);
+
     const uploaded = await Promise.all(
-      imageFiles.map(async (file, index) => {
+      imageFiles.map(async (file, i) => {
         const buf    = await file.arrayBuffer();
         const base64 = `data:${file.type};base64,${Buffer.from(buf).toString("base64")}`;
         const { url, publicId } = await uploadImage(base64);
-        return { url, publicId, isPrimary: index === 0, order: index };
+
+        // color mapping
+        const variantColor = Object.entries(imageColors).find(([color, idx]) => idx === i)?.[0] || null;
+
+        return {
+          url,
+          publicId,
+          isPrimary: i === primaryIndex,
+          order: i,
+          variantColor
+        };
       })
     );
 
