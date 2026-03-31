@@ -6,7 +6,12 @@ import AddProductDrawer from "@/components/admin/AddProductDrawer"
 import ProductDetailModal, { Product } from "@/components/admin/ProductDetailModal"
 import EditProductDrawer from "@/components/admin/EditProductDrawer"
 
-interface Category { id: string; name: string }
+
+interface Category {
+  id: string
+  name: string
+  parentId: string | null
+}
 
 export default function ProductsPage() {
   const [products,   setProducts]   = useState<Product[]>([])
@@ -24,7 +29,7 @@ export default function ProductsPage() {
   }
 
   const fetchCategories = async () => {
-    const res  = await fetch("/api/categories")
+    const res  = await fetch("/api/categories?flat=true")
     const data = await res.json()
     setCategories(data.data ?? [])
   }

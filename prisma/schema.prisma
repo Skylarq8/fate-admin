@@ -19,16 +19,29 @@ enum OrderStatus {
   delivered
 }
 
+// ─── Category (self-relation, unlimited depth) ────────────────────────────────
 model Category {
   id        String   @id @default(cuid())
-  name      String   @unique
+  name      String
   slug      String   @unique
+  imageUrl  String?
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Self-relation
+  parentId  String?
+  parent    Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children  Category[] @relation("CategoryTree")
+
   products  ProductCategory[]
+
+  @@index([parentId])
+  @@unique([slug, parentId])
 }
 
+// ─── Product ──────────────────────────────────────────────────────────────────
 model Product {
   id              String        @id @default(cuid())
   title           String
@@ -47,16 +60,29 @@ model Product {
   categories  ProductCategory[]
   orderItems  OrderItem[]
   coupons     CouponProduct[]
+  variants    ProductVariantOption[]
+}
+
+model ProductVariantOption {
+  id        String   @id @default(cuid())
+  productId String
+  label     String   // "Хэмжээ", "Өнгө", "Хамгаалалт", "Хүрээ" гэх мэт
+  values    String[] // сонголтын утгууд
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
 }
 
 model ProductImage {
-  id        String   @id @default(cuid())
-  url       String
-  publicId  String
-  isPrimary Boolean  @default(false)
-  order     Int      @default(0)
-  productId String
-  createdAt DateTime @default(now())
+  id           String   @id @default(cuid())
+  url          String
+  publicId     String
+  isPrimary    Boolean  @default(false)
+  order        Int      @default(0)
+  variantColor String?  // энэ өнгөний зураг гэдгийг тэмдэглэнэ
+  productId    String
+  createdAt    DateTime @default(now())
 
   product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
 }
@@ -71,6 +97,7 @@ model ProductCategory {
   @@id([productId, categoryId])
 }
 
+// ─── Order ────────────────────────────────────────────────────────────────────
 model Order {
   id              String      @id @default(cuid())
   customerName    String
@@ -98,6 +125,7 @@ model OrderItem {
   product   Product @relation(fields: [productId], references: [id])
 }
 
+// ─── Coupon ───────────────────────────────────────────────────────────────────
 model Coupon {
   id              String    @id @default(cuid())
   code            String    @unique

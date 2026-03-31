@@ -15,6 +15,13 @@ interface Category {
   category: { id: string; name: string }
 }
 
+export interface VariantOption {
+  id: string
+  label: string
+  values: string[]
+  order: number
+}
+
 export interface Product {
   id: string
   title: string
@@ -29,6 +36,7 @@ export interface Product {
   createdAt: string
   images: ProductImage[]
   categories: Category[]
+  variants?: VariantOption[]
 }
 
 interface Props {

@@ -12,7 +12,11 @@ import { ToastContainer } from "@/components/ui/toast"
 import { useToast } from "@/hooks/useToast"
 import { ChevronDown, X, Loader2 } from "lucide-react"
 
-interface Category { id: string; name: string }
+interface Category {
+  id: string
+  name: string
+  parentId: string | null
+}
 
 interface AddProductDrawerProps {
   categories: Category[]
@@ -38,6 +42,28 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [categoryOpen, setCategoryOpen] = useState(false)
   const [images, setImages] = useState<File[]>([])
+
+  // variants
+  const [variants, setVariants] = useState<{ label: string; values: string[] }[]>([])
+
+  // image color mapping
+  const [imageColors, setImageColors] = useState<Record<number, string>>({})
+
+  // primary image index
+  const [primaryIndex, setPrimaryIndex] = useState(0)
+
+
+  const getCategoryLabel = (cat: Category): string => {
+    const names: string[] = []
+    let current: Category | undefined = cat
+
+    while (current) {
+      names.unshift(current.name)
+      current = categories.find(c => c.id === current!.parentId)
+    }
+
+    return names.join(" / ")
+  }
 
   const formatPrice = (val: string) => {
     const num = val.replace(/\D/g, "")
@@ -77,11 +103,14 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
 
     const formData = new FormData()
     formData.append("title",           title.trim())
+    formData.append("imageColors", JSON.stringify(imageColors))
+    formData.append("primaryIndex", String(primaryIndex))
     formData.append("description",     description.trim())
     formData.append("price",           String(parsePrice(price)))
     formData.append("discountEnabled", String(discountEnabled))
     formData.append("sizes",           JSON.stringify(sizes))
     formData.append("colors",          JSON.stringify(colors))
+    formData.append("variants", JSON.stringify(variants))
     formData.append("categories",      JSON.stringify(selectedCategories))
     images.forEach(img => formData.append("images", img))
     if (discountEnabled) {
@@ -95,6 +124,7 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
       const data = await res.json()
       if (!res.ok) return error(data.message || "Алдаа гарлаа.")
       success("Бараа амжилттай нэмэгдлээ! 🎉")
+      setVariants([])
       setTimeout(() => { resetForm(); setOpen(false); onSuccess?.() }, 1200)
     } catch {
       error("Сүлжээний алдаа гарлаа.")
@@ -126,15 +156,45 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
               {images.length > 0 && (
                 <div className="grid grid-cols-3 gap-2">
                   {images.map((img, i) => (
-                    <div key={i} className="relative rounded-md overflow-hidden">
-                      {i === 0 && (
-                        <span className="absolute top-1 left-1 bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded z-10">Primary</span>
-                      )}
-                      <img src={URL.createObjectURL(img)} className="w-full h-24 object-cover" />
-                      <X onClick={() => setImages(prev => prev.filter((_, idx) => idx !== i))}
-                        className="absolute top-1 right-1 bg-black/60 text-white rounded cursor-pointer" size={18} />
-                    </div>
-                  ))}
+                  <div key={i} className="relative rounded-md overflow-hidden border border-slate-700">
+
+                    {/* PRIMARY BUTTON */}
+                    <button
+                      onClick={() => setPrimaryIndex(i)}
+                      className={`absolute top-1 left-1 text-[10px] px-1.5 py-0.5 rounded z-10 ${
+                        primaryIndex === i
+                          ? "bg-amber-500 text-white"
+                          : "bg-black/60 text-white/60"
+                      }`}
+                    >
+                      {primaryIndex === i ? "Primary" : "Set"}
+                    </button>
+
+                    <img src={URL.createObjectURL(img)} className="w-full h-24 object-cover" />
+
+                    {/* COLOR SELECT */}
+                    {colors.length > 0 && (
+                      <select
+                        value={imageColors[i] || ""}
+                        onChange={e =>
+                          setImageColors(prev => ({ ...prev, [i]: e.target.value }))
+                        }
+                        className="absolute bottom-1 left-1 right-1 text-[10px] bg-black/70 text-white rounded px-1 py-0.5"
+                      >
+                        <option value="">No color</option>
+                        {colors.map(c => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    )}
+
+                    <X
+                      onClick={() => setImages(prev => prev.filter((_, idx) => idx !== i))}
+                      className="absolute top-1 right-1 bg-black/60 text-white rounded cursor-pointer"
+                      size={18}
+                    />
+                  </div>
+                ))}
                 </div>
               )}
               <p className="text-xs text-white/30">Эхний зураг primary болно</p>
@@ -160,7 +220,7 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
                   const cat = categories.find(c => c.id === id)
                   return (
                     <div key={id} className="flex items-center gap-1 bg-slate-800 px-3 py-1 rounded-md text-sm">
-                      {cat?.name}
+                      {cat ? getCategoryLabel(cat) : ""}
                       <X onClick={() => toggleCategory(id)} className="text-red-500 cursor-pointer" size={14} />
                     </div>
                   )
@@ -175,7 +235,7 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
                   {categories.map(cat => (
                     <label key={cat.id} className="flex items-center space-x-2 cursor-pointer hover:bg-slate-700 p-1 rounded">
                       <Checkbox checked={selectedCategories.includes(cat.id)} onCheckedChange={() => toggleCategory(cat.id)} />
-                      <span className="text-sm">{cat.name}</span>
+                      <span className="text-sm">{getCategoryLabel(cat)}</span>
                     </label>
                   ))}
                 </div>
@@ -206,6 +266,61 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
                     }`}>{c}</button>
                 ))}
               </div>
+            </div>
+
+            {/* ── Variants ── */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Custom Variants</Label>
+                <button
+                  onClick={() => setVariants(prev => [...prev, { label: "", values: [] }])}
+                  className="text-xs text-white/40 hover:text-white"
+                >
+                  + Add
+                </button>
+              </div>
+
+              {variants.length === 0 ? (
+                <p className="text-white/30 text-xs">Variant байхгүй</p>
+              ) : (
+                <div className="space-y-2">
+                  {variants.map((v, i) => (
+                    <div key={i} className="bg-slate-800 border border-slate-700 p-2 rounded-lg space-y-1">
+                      
+                      {/* label */}
+                      <input
+                        value={v.label}
+                        onChange={e => {
+                          const newV = [...variants]
+                          newV[i].label = e.target.value
+                          setVariants(newV)
+                        }}
+                        placeholder="Жишээ: Хамгаалалт"
+                        className="w-full bg-slate-700 px-2 py-1 rounded text-sm"
+                      />
+
+                      {/* values */}
+                      <input
+                        value={v.values.join(", ")}
+                        onChange={e => {
+                          const newV = [...variants]
+                          newV[i].values = e.target.value.split(",").map(s => s.trim())
+                          setVariants(newV)
+                        }}
+                        placeholder="утгууд (ж: Байгаа, Байхгүй)"
+                        className="w-full bg-slate-700 px-2 py-1 rounded text-xs"
+                      />
+
+                      <button
+                        onClick={() => setVariants(prev => prev.filter((_, idx) => idx !== i))}
+                        className="text-red-400 text-xs"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Price */}

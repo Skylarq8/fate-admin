@@ -74,7 +74,7 @@ export default function AnalyticsPage() {
     })
   }, [])
 
-  if (loading) return <div className="p-6 text-white/40 text-sm">Loading...</div>
+  if (loading) return <div className="py-6 px-1 text-white/40 text-sm">Loading...</div>
 
   const fmt = (n: number) => new Intl.NumberFormat("mn-MN").format(n) + "₮"
   const today = new Date()

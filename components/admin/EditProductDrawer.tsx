@@ -1,7 +1,7 @@
 // 📁 components/admin/EditProductDrawer.tsx
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,8 +10,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ToastContainer } from "@/components/ui/toast"
 import { useToast } from "@/hooks/useToast"
-import { ChevronDown, X, Loader2, Trash2 } from "lucide-react"
-import { Product } from "@/components/admin/ProductDetailModal"
+import { ChevronDown, X, Loader2, Trash2, Star, ImageIcon, Plus, GripVertical } from "lucide-react"
+import { Product, VariantOption } from "@/components/admin/ProductDetailModal"
 
 interface Category { id: string; name: string }
 interface Props {
@@ -40,36 +40,96 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
   const [discountEndsAt,  setDiscountEndsAt]  = useState(
     product.discountEndsAt ? new Date(product.discountEndsAt).toISOString().slice(0, 16) : ""
   )
-  const [status,       setStatus]       = useState<"active" | "inactive">(product.status)
-  const [sizes,        setSizes]        = useState<string[]>(product.sizes)
-  const [colors,       setColors]       = useState<string[]>(product.colors)
-  const [selectedCats, setSelectedCats] = useState<string[]>(product.categories.map(c => c.category.id))
-  const [categoryOpen, setCategoryOpen] = useState(false)
-  const [loading,      setLoading]      = useState(false)
+  const [status,        setStatus]        = useState<"active" | "inactive">(product.status)
+  const [sizes,         setSizes]         = useState<string[]>(product.sizes)
+  const [colors,        setColors]        = useState<string[]>(product.colors)
+  const [selectedCats,  setSelectedCats]  = useState<string[]>(product.categories.map(c => c.category.id))
+  const [categoryOpen,  setCategoryOpen]  = useState(false)
+  const [loading,       setLoading]       = useState(false)
   const [deleting,      setDeleting]      = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [images,        setImages]        = useState(product.images ?? [])
+  const [variants,      setVariants]      = useState<VariantOption[]>(product.variants ?? [])
+  const [varLoading,    setVarLoading]    = useState(false)
+
+  useEffect(() => {
+    // variants татах
+    fetch(`/api/products/${product.id}/variants`)
+      .then(r => r.json())
+      .then(d => setVariants(d.data ?? []))
+  }, [product.id])
+
+  const saveVariants = async (newVariants: VariantOption[]) => {
+    setVarLoading(true)
+    await fetch(`/api/products/${product.id}/variants`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ variants: newVariants }),
+    })
+    setVarLoading(false)
+  }
+
+  const addVariant = () => {
+    const newV = { id: `temp-${Date.now()}`, label: "", values: [], order: variants.length }
+    setVariants(prev => [...prev, newV])
+  }
+
+  const updateVariantLabel = (id: string, label: string) => {
+    setVariants(prev => prev.map(v => v.id === id ? { ...v, label } : v))
+  }
+
+  const updateVariantValues = (id: string, raw: string) => {
+    const values = raw.split(",").map(s => s.trim()).filter(Boolean)
+    setVariants(prev => prev.map(v => v.id === id ? { ...v, values } : v))
+  }
+
+  const removeVariant = (id: string) => {
+    const newV = variants.filter(v => v.id !== id)
+    setVariants(newV)
+    saveVariants(newV)
+  }
+  const [imgLoading,    setImgLoading]    = useState<string | null>(null)
+
+  useEffect(() => { setImages(product.images ?? []) }, [product.id])
+
+  const handleSetPrimary = async (imageId: string) => {
+    setImgLoading(imageId)
+    await fetch(`/api/products/${product.id}/images/${imageId}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isPrimary: true }),
+    })
+    setImages(prev => prev.map(img => ({ ...img, isPrimary: img.id === imageId })))
+    setImgLoading(null)
+  }
+
+  const handleSetVariantColor = async (imageId: string, color: string) => {
+    await fetch(`/api/products/${product.id}/images/${imageId}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ variantColor: color }),
+    })
+    setImages(prev => prev.map(img => img.id === imageId ? { ...img, variantColor: color } : img))
+  }
 
   const toggleChip = (val: string, list: string[], setter: (v: string[]) => void) =>
     setter(list.includes(val) ? list.filter(v => v !== val) : [...list, val])
 
-    // ── Delete ────────────────────────────────────────────────────────────────
+  // ── Delete ────────────────────────────────────────────────────────────────
   const handleDelete = async () => {
     setDeleting(true)
     try {
       const res  = await fetch(`/api/products/${product.id}`, { method: "DELETE" })
       const data = await res.json()
-      console.log("DELETE status:", res.status, "body:", data)
       if (!res.ok) { error(data.message || "Устгахад алдаа гарлаа."); return }
-      success("Бараа устгагдлаа.")
-      setTimeout(() => { onDeleted?.(product.id); onClose() }, 800)
-    } catch (err) {
-      console.error("DELETE fetch error:", err)
+      onDeleted?.(product.id)
+      onClose()
+    } catch {
       error("Сүлжээний алдаа гарлаа.")
     } finally {
       setDeleting(false)
     }
   }
 
+  // ── Save ──────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     if (!title.trim())       return error("Нэр оруулна уу.")
     if (!description.trim()) return error("Тайлбар оруулна уу.")
@@ -98,9 +158,9 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
       setLoading(true)
       const res  = await fetch(`/api/products/${product.id}`, { method: "PATCH", body: formData })
       const data = await res.json()
-      if (!res.ok) return error(data.message || "Алдаа гарлаа.")
+      if (!res.ok) { error(data.message || "Алдаа гарлаа."); return }
       success("Амжилттай хадгалагдлаа!")
-      setTimeout(() => onSuccess(data.data), 1000)
+      setTimeout(() => onSuccess(data.data), 900)
     } catch {
       error("Сүлжээний алдаа гарлаа.")
     } finally {
@@ -111,12 +171,14 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
   return (
     <>
       <Sheet open onOpenChange={v => { if (!v) onClose() }}>
-        <SheetContent side="right" className="w-full sm:w-[440px] overflow-y-auto bg-slate-900 text-white border-slate-700" onOpenAutoFocus={(e) => e.preventDefault()}>
+        <SheetContent side="right" className="w-full sm:w-[440px] overflow-y-auto bg-slate-900 text-white border-slate-700"
+          onOpenAutoFocus={e => e.preventDefault()}>
           <SheetHeader className="px-5 pb-4">
             <SheetTitle className="text-white text-lg">Edit Product</SheetTitle>
           </SheetHeader>
 
           <div className="space-y-4 px-5 pb-8">
+
             {/* Name */}
             <div className="space-y-2">
               <Label>Name</Label>
@@ -196,28 +258,18 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
 
             {/* Status toggle */}
             <div className="flex items-center justify-between bg-slate-800 border border-slate-700 rounded-xl px-4 py-3">
-              <div>
-                <p className="text-white text-sm font-medium">Status</p>
-                {/* <p className="text-white/40 text-xs mt-0.5">Барааг идэвхтэй эсэхийг тохируулна</p> */}
-              </div>
-              <button
-                onClick={() => setStatus(s => s === "active" ? "inactive" : "active")}
-                className={`relative w-12 h-6 rounded-full transition-colors ${status === "active" ? "bg-green-500" : "bg-slate-600"}`}
-              >
+              <p className="text-white text-sm font-medium">Status</p>
+              <button onClick={() => setStatus(s => s === "active" ? "inactive" : "active")}
+                className={`relative w-12 h-6 rounded-full transition-colors ${status === "active" ? "bg-green-500" : "bg-slate-600"}`}>
                 <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${status === "active" ? "left-7" : "left-1"}`} />
               </button>
             </div>
 
             {/* Discount toggle */}
             <div className="flex items-center justify-between bg-slate-800 border border-slate-700 rounded-xl px-4 py-3">
-              <div>
-                <p className="text-white text-sm font-medium">Discount</p>
-                {/* <p className="text-white/40 text-xs mt-0.5">Хямдрал идэвхжүүлэх</p> */}
-              </div>
-              <button
-                onClick={() => setDiscountEnabled(v => !v)}
-                className={`relative w-12 h-6 rounded-full transition-colors ${discountEnabled ? "bg-blue-500" : "bg-slate-600"}`}
-              >
+              <p className="text-white text-sm font-medium">Discount</p>
+              <button onClick={() => setDiscountEnabled(v => !v)}
+                className={`relative w-12 h-6 rounded-full transition-colors ${discountEnabled ? "bg-blue-500" : "bg-slate-600"}`}>
                 <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${discountEnabled ? "left-7" : "left-1"}`} />
               </button>
             </div>
@@ -238,6 +290,102 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
               </div>
             )}
 
+            {/* ── Custom Variants ── */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-white">Custom Variants</Label>
+                <button onClick={addVariant}
+                  className="flex items-center gap-1 text-xs text-white/40 hover:text-white px-2 py-1 rounded-lg hover:bg-slate-700 transition-colors">
+                  <Plus size={12} /> Нэмэх
+                </button>
+              </div>
+              <p className="text-white/30 text-xs">Sizes/Colors-оос гадна нэмэлт сонголт. Жишээ: Хамгаалалт → Байгаа, Байхгүй</p>
+              {variants.length === 0 ? (
+                <p className="text-white/20 text-xs text-center py-3">Variant байхгүй</p>
+              ) : (
+                <div className="space-y-2">
+                  {variants.map(v => (
+                    <div key={v.id} className="bg-slate-800/60 border border-slate-700 rounded-xl p-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <input
+                          value={v.label}
+                          onChange={e => updateVariantLabel(v.id, e.target.value)}
+                          placeholder="Label (жишээ: Хамгаалалт)"
+                          className="flex-1 bg-slate-700 border border-slate-600 text-white text-sm px-2.5 py-1.5 rounded-lg outline-none focus:border-violet-500"
+                        />
+                        <button onClick={() => removeVariant(v.id)}
+                          className="text-white/30 hover:text-red-400 p-1 transition-colors">
+                          <X size={14} />
+                        </button>
+                      </div>
+                      <input
+                        value={v.values.join(", ")}
+                        onChange={e => updateVariantValues(v.id, e.target.value)}
+                        placeholder="Утгууд таслалаар (жишээ: Байгаа, Байхгүй)"
+                        className="w-full bg-slate-700 border border-slate-600 text-white text-xs px-2.5 py-1.5 rounded-lg outline-none focus:border-violet-500"
+                      />
+                      {v.values.length > 0 && (
+                        <div className="flex gap-1 flex-wrap">
+                          {v.values.map(val => (
+                            <span key={val} className="bg-slate-700 text-white/60 text-xs px-2 py-0.5 rounded-full">{val}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => saveVariants(variants)}
+                    disabled={varLoading}
+                    className="w-full text-xs py-2 border border-slate-600 hover:border-slate-500 text-white/50 hover:text-white rounded-xl transition-colors flex items-center justify-center gap-1.5">
+                    {varLoading ? <><Loader2 size={12} className="animate-spin" /> Хадгалж байна...</> : "Variants хадгалах"}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* ── Зургийн variant color ── */}
+            {images.length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-white flex items-center gap-1.5"><ImageIcon size={14} /> Зургийн өнгө тохиргоо</Label>
+                <p className="text-white/30 text-xs">Зургийн хажууд өнгө сонгоход тэр өнгөний бараа сонгогдоход харагдана</p>
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {[...images].sort((a, b) => a.order - b.order).map(img => (
+                    <div key={img.id} className="flex items-center gap-2 bg-slate-800/60 border border-slate-700 rounded-xl p-2">
+                      <img src={img.url} className="w-12 h-12 object-cover rounded-lg flex-shrink-0" />
+                      <div className="flex-1 min-w-0 space-y-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => handleSetPrimary(img.id)}
+                            className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition-colors ${
+                              img.isPrimary
+                                ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                                : "text-white/30 hover:text-white/60 border border-transparent hover:border-slate-600"
+                            }`}>
+                            {imgLoading === img.id
+                              ? <Loader2 size={11} className="animate-spin" />
+                              : <Star size={11} className={img.isPrimary ? "fill-amber-400" : ""} />
+                            }
+                            {img.isPrimary ? "Primary" : "Primary болгох"}
+                          </button>
+                        </div>
+                        <select
+                          value={(img as any).variantColor ?? ""}
+                          onChange={e => handleSetVariantColor(img.id, e.target.value)}
+                          className="w-full bg-slate-700 border border-slate-600 text-white text-xs px-2 py-1 rounded-lg outline-none"
+                        >
+                          <option value="">— Өнгө холбоогүй —</option>
+                          {product.colors.map(c => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Save */}
             <Button onClick={handleSubmit} disabled={loading} className="w-full py-5 bg-slate-950 hover:bg-slate-800">
               {loading ? <><Loader2 className="animate-spin mr-2" size={16} />Saving...</> : "Save Changes"}
             </Button>
@@ -263,6 +411,7 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
                 </div>
               </div>
             )}
+
           </div>
         </SheetContent>
       </Sheet>

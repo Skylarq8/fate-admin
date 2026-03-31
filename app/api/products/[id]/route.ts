@@ -13,6 +13,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
     include: {
       images:     { orderBy: [{ isPrimary: "desc" }, { order: "asc" }] },
       categories: { include: { category: true } },
+      variants:   { orderBy: { order: "asc" } },
     },
   })
   if (!product) return fail("Бараа олдсонгүй.", 404)
@@ -72,6 +73,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
       include: {
         images:     { orderBy: [{ isPrimary: "desc" }, { order: "asc" }] },
         categories: { include: { category: true } },
+        variants:   { orderBy: { order: "asc" } },
       },
     })
     return ok(product)

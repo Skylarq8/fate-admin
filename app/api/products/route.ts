@@ -28,6 +28,7 @@ export async function GET(req: NextRequest) {
     include: {
       images: { orderBy: [{ isPrimary: "desc" }, { order: "asc" }] },
       categories: { include: { category: true } },
+      variants: { orderBy: { order: "asc" } }, 
     },
     orderBy: { createdAt: "desc" },
   });
@@ -67,6 +68,8 @@ export async function POST(req: NextRequest) {
 
     const sizes       = JSON.parse((formData.get("sizes")      as string) || "[]");
     const colors      = JSON.parse((formData.get("colors")     as string) || "[]");
+    const variantsRaw = formData.get("variants") as string | null
+    const variants = variantsRaw ? JSON.parse(variantsRaw) : []
     const categoryIds = JSON.parse((formData.get("categories") as string) || "[]") as string[];
 
     // ── images upload ─────────────────────────────────────────────────────────
@@ -95,10 +98,18 @@ export async function POST(req: NextRequest) {
         status: "active",
         images:     { create: uploaded },
         categories: { create: categoryIds.map((id) => ({ categoryId: id })) },
+        variants: {
+          create: variants.map((v: any, index: number) => ({
+            label: v.label,
+            values: v.values,
+            order: index
+          }))
+        }
       },
       include: {
         images: { orderBy: [{ isPrimary: "desc" }, { order: "asc" }] },
         categories: { include: { category: true } },
+        variants: { orderBy: { order: "asc" } }, 
       },
     });
 

@@ -1,177 +1,203 @@
-// 📁 app/admin/categories/page.tsx
+// 📁 app/dashboard/categories/page.tsx
 "use client"
 
 import { useEffect, useState } from "react"
-import { ChevronRight, X, Tag, Boxes } from "lucide-react"
-import AddCategoryModal from "@/components/admin/AddCategoryModal"
+import { ChevronRight, FolderOpen, Folder, Plus, Pencil, Trash2, Check, X, Tag, ArrowLeft } from "lucide-react"
 import ProductDetailModal, { Product } from "@/components/admin/ProductDetailModal"
+import EditProductDrawer from "@/components/admin/EditProductDrawer"
+import AddCategoryModal from "@/components/admin/AddCategoryModal"
 
 interface Category {
   id: string
   name: string
   slug: string
+  parentId: string | null
   _count: { products: number }
+  children: Category[]
+}
+
+function EditInput({ value, onSave, onCancel }: { value: string; onSave: (v: string) => void; onCancel: () => void }) {
+  const [val, setVal] = useState(value)
+  return (
+    <div className="flex items-center gap-1.5 flex-1" onClick={e => e.stopPropagation()}>
+      <input value={val} onChange={e => setVal(e.target.value)}
+        onKeyDown={e => { if (e.key === "Enter") onSave(val); if (e.key === "Escape") onCancel() }}
+        autoFocus
+        className="flex-1 bg-slate-700 border border-violet-500/50 text-white text-sm px-2.5 py-1 rounded-lg outline-none min-w-0" />
+      <button onClick={() => onSave(val)} className="text-green-400 hover:text-green-300 p-1"><Check size={14} /></button>
+      <button onClick={onCancel} className="text-white/40 hover:text-white p-1"><X size={14} /></button>
+    </div>
+  )
 }
 
 export default function CategoriesPage() {
-  const [categories,        setCategories]        = useState<Category[]>([])
-  const [loadingCategories, setLoadingCategories] = useState(true)
-  const [selectedCat,       setSelectedCat]       = useState<Category | null>(null)
-  const [products,          setProducts]          = useState<Product[]>([])
-  const [loadingProducts,   setLoadingProducts]   = useState(false)
-  const [selectedProduct,   setSelectedProduct]   = useState<Product | null>(null)
-  const [allCategories,     setAllCategories]     = useState<{ id: string; name: string }[]>([])
+  const [categories,      setCategories]      = useState<Category[]>([])
+  const [loading,         setLoading]         = useState(true)
+  const [expanded,        setExpanded]        = useState<Set<string>>(new Set())
+  const [editingId,       setEditingId]       = useState<string | null>(null)
+  const [selectedCatId,   setSelectedCatId]   = useState<string | null>(null)
+  const [selectedCatName, setSelectedCatName] = useState<string>("")
+  const [products,        setProducts]        = useState<Product[]>([])
+  const [loadingProducts, setLoadingProducts] = useState(false)
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+  const [editingProduct,  setEditingProduct]  = useState<Product | null>(null)
+  const [allCategories,   setAllCategories]   = useState<{ id: string; name: string }[]>([])
+  const [showProducts,    setShowProducts]    = useState(false) // mobile: products panel
 
   const fetchCategories = async () => {
-    setLoadingCategories(true)
+    setLoading(true)
     const res  = await fetch("/api/categories")
     const data = await res.json()
-    setCategories(data.data ?? [])
-    setAllCategories((data.data ?? []).map((c: Category) => ({ id: c.id, name: c.name })))
-    setLoadingCategories(false)
+    const cats = data.data ?? []
+    setCategories(cats)
+    const flat: { id: string; name: string }[] = []
+    const flatten = (list: Category[]) => list.forEach(c => { flat.push({ id: c.id, name: c.name }); flatten(c.children ?? []) })
+    flatten(cats)
+    setAllCategories(flat)
+    setLoading(false)
   }
 
   useEffect(() => { fetchCategories() }, [])
 
-  const openCategory = async (cat: Category) => {
-    setSelectedCat(cat)
+  const fetchProducts = async (cat: Category) => {
+    setSelectedCatId(cat.id)
+    setSelectedCatName(cat.slug)
     setProducts([])
     setLoadingProducts(true)
+    setShowProducts(true)
     try {
       const res  = await fetch(`/api/categories/${cat.id}/products`)
       const data = await res.json()
       setProducts(data.data?.products ?? [])
-    } catch {
-      setProducts([])
-    } finally {
-      setLoadingProducts(false)
-    }
+    } finally { setLoadingProducts(false) }
   }
 
-  const formatPrice = (n: number) => new Intl.NumberFormat("mn-MN").format(n) + "₮"
+  const countProductsRecursive = (cat: Category): number => {
+    let count = cat._count.products
+    if (cat.children?.length) {
+      count += cat.children.reduce((acc, c) => acc + countProductsRecursive(c), 0)
+    }
+    return count
+  }
 
-  return (
-    <div className="py-4 px-1 md:p-6 min-h-screen">
+  const toggleExpand = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setExpanded(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+  }
 
-      {/* Header */}
-      <div className="flex justify-between items-center mb-4 md:mb-6">
-        <div>
-          <h1 className="text-xl md:text-2xl font-bold text-white">Categories</h1>
-          {selectedCat && (
-            <div className="flex items-center gap-1.5 mt-1 text-xs md:text-sm text-white/40">
-              <button onClick={() => setSelectedCat(null)} className="hover:text-white transition-colors">
-                All
-              </button>
-              <ChevronRight size={12} />
-              <span className="text-white">{selectedCat.name}</span>
-            </div>
-          )}
-        </div>
-        {!selectedCat && <AddCategoryModal onSuccess={fetchCategories} />}
-        {selectedCat && (
-          <button
-            onClick={() => setSelectedCat(null)}
-            className="flex items-center gap-1.5 text-white/40 hover:text-white text-sm transition-colors"
-          >
-            <X size={14} /> Буцах
+  const handleRename = async (id: string, name: string) => {
+    if (!name.trim()) return
+    await fetch(`/api/categories/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name.trim() }),
+    })
+    setEditingId(null)
+    fetchCategories()
+  }
+
+  const handleDelete = async (cat: Category, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!confirm(`"${cat.name}" устгах уу?`)) return
+    await fetch(`/api/categories/${cat.id}`, { method: "DELETE" })
+    if (selectedCatId === cat.id) { setSelectedCatId(null); setProducts([]); setShowProducts(false) }
+    fetchCategories()
+  }
+
+  const fmt = (n: number) => new Intl.NumberFormat("mn-MN").format(n) + "₮"
+
+  // ── Tree row ──────────────────────────────────────────────────────────────
+  const TreeRow = ({ cat, depth = 0 }: { cat: Category; depth?: number }) => {
+    const isExpanded  = expanded.has(cat.id)
+    const hasChildren = (cat.children?.length ?? 0) > 0
+    const isEditing   = editingId === cat.id
+    const isSelected  = selectedCatId === cat.id
+
+    return (
+      <div>
+        <div
+          onClick={() => !isEditing && fetchProducts(cat)}
+          className={`group flex items-center gap-2.5 py-2.5 pr-200 rounded-xl cursor-pointer transition-all border
+            ${isSelected
+              ? "bg-violet-500/10 border-violet-500/20 text-white"
+              : "border-transparent hover:bg-slate-800/50 text-white/70 hover:text-white"
+            }`}
+          style={{ paddingLeft: `${10 + depth * 18}px` }}
+        >
+          {/* expand arrow */}
+          <button onClick={e => hasChildren && toggleExpand(cat.id, e)}
+            className={`flex-shrink-0 w-4 transition-all ${hasChildren ? "text-white/70 hover:text-white" : "opacity-0 pointer-events-none"}`}>
+            <ChevronRight size={20} className={`transition-transform ${isExpanded ? "rotate-90" : ""}`} />
           </button>
-        )}
-      </div>
 
-      {/* ── Category list ── */}
-      {!selectedCat && (
-        <>
-          {loadingCategories ? (
-            <div className="text-white/40 text-sm">Loading...</div>
-          ) : categories.length === 0 ? (
-            <div className="text-white/40 text-sm">Category байхгүй байна.</div>
+          {/* icon */}
+          {hasChildren
+            ? <FolderOpen size={18} className={isSelected ? "text-violet-400 flex-shrink-0" : "text-white/30 flex-shrink-0"} />
+            : <Folder    size={18} className={isSelected ? "text-violet-400 flex-shrink-0" : "text-white/20 flex-shrink-0"} />
+          }
+
+          {/* name */}
+          {isEditing ? (
+            <EditInput value={cat.name} onSave={v => handleRename(cat.id, v)} onCancel={() => setEditingId(null)} />
           ) : (
             <>
-              <div className="text-white/40 text-sm pb-2">Нийт {categories.length} category байна.</div>
-              {/* Desktop table */}
-              <div className="hidden md:block rounded-xl border border-slate-700 overflow-hidden">
-                <table className="w-full text-sm text-white">
-                  <thead className="bg-slate-800 text-white/50 text-xs uppercase">
-                    <tr>
-                      <th className="px-4 py-3 text-left">Нэр</th>
-                      <th className="px-4 py-3 text-left">Slug</th>
-                      <th className="px-4 py-3 text-left">Бараа</th>
-                      <th className="px-4 py-3 text-left"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800">
-                    {categories.map(cat => (
-                      <tr
-                        key={cat.id}
-                        onClick={() => openCategory(cat)}
-                        className="hover:bg-slate-800/60 cursor-pointer transition-colors"
-                      >
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 bg-slate-800 border border-slate-700 rounded-lg flex items-center justify-center">
-                              <Tag size={14} className="text-white/40" />
-                            </div>
-                            <span className="font-medium">{cat.name}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-white/40 font-mono text-xs">{cat.slug}</td>
-                        <td className="px-4 py-3">
-                          <span className="bg-slate-800 border border-slate-700 text-white/60 text-xs px-2.5 py-1 rounded-full">
-                            {cat._count.products} бараа
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-white/30">
-                          <ChevronRight size={16} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Mobile card list */}
-              <div className="md:hidden space-y-2">
-                {categories.map(cat => (
-                  <div
-                    key={cat.id}
-                    onClick={() => openCategory(cat)}
-                    className="flex items-center gap-3 bg-slate-800/60 border border-slate-700 rounded-xl p-4 cursor-pointer active:bg-slate-700 transition-colors"
-                  >
-                    <div className="w-10 h-10 bg-slate-700 border border-slate-600 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <Tag size={16} className="text-white/50" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-white text-sm">{cat.name}</p>
-                      <p className="text-white/40 text-xs font-mono">{cat.slug}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="bg-slate-700 text-white/50 text-xs px-2.5 py-1 rounded-full">
-                        {cat._count.products}
-                      </span>
-                      <ChevronRight size={16} className="text-white/30" />
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <span className="flex-1 text-sm">{cat.name}</span>
+              <span className="text-white/70 text-[14px] flex-shrink-0">{countProductsRecursive(cat)}</span>
             </>
           )}
-        </>
-      )}
 
-      {/* ── Products of selected category ── */}
-      {selectedCat && (
-        <div>
-          <div className="flex items-center gap-2 mb-4">
-            <Boxes size={16} className="text-white/40" />
-            <span className="text-white/60 text-sm">
-              {loadingProducts ? "Loading..." : `${products.length} бараа`}
-            </span>
+          {/* actions on hover */}
+          {/* {!isEditing && (
+            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+              onClick={e => e.stopPropagation()}>
+              <AddCategoryModal
+                onSuccess={() => { fetchCategories(); setExpanded(p => new Set(p).add(cat.id)) }}
+              />
+              <button onClick={e => { e.stopPropagation(); setEditingId(cat.id) }}
+                className="p-1 text-white/20 hover:text-white hover:bg-slate-700 rounded-md transition-colors">
+                <Pencil size={12} />
+              </button>
+              <button onClick={e => handleDelete(cat, e)}
+                className="p-1 text-white/20 hover:text-red-400 hover:bg-slate-700 rounded-md transition-colors">
+                <Trash2 size={12} />
+              </button>
+            </div>
+          )} */}
+        </div>
+
+        {/* children */}
+        {isExpanded && cat.children?.map(child => (
+          <TreeRow key={child.id} cat={child} depth={depth + 1} />
+        ))}
+      </div>
+    )
+  }
+
+  // ── Products panel ────────────────────────────────────────────────────────
+  const ProductsPanel = () => (
+    <div className="flex-1 min-w-0">
+      {!selectedCatId ? (
+        <div className="hidden md:flex flex-col items-center justify-center h-64 text-white/20 space-y-3">
+          <Tag size={36} className="opacity-30" />
+          <p className="text-sm">Зүүн талаас category сонгоно уу</p>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center gap-3 mb-5">
+            <button onClick={() => setShowProducts(false)} className="md:hidden text-white/70 hover:text-white p-1">
+              <ArrowLeft size={18} />
+            </button>
+            <div>
+              <h2 className="text-white font-bold text-lg">{selectedCatName}</h2>
+              <p className="text-white/40 text-sm">{loadingProducts ? "Уншиж байна..." : `${products.length} бараа`}</p>
+            </div>
           </div>
 
           {loadingProducts ? (
-            <div className="text-white/40 text-sm">Loading...</div>
+            <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-16 bg-slate-800/60 rounded-xl animate-pulse" />)}</div>
           ) : products.length === 0 ? (
-            <div className="text-white/40 text-sm">Энэ category-д бараа байхгүй байна.</div>
+            <div className="flex flex-col items-center justify-center h-48 text-white/20 space-y-2">
+              <p className="text-sm">Бараа байхгүй байна</p>
+            </div>
           ) : (
             <>
               {/* Desktop table */}
@@ -188,38 +214,29 @@ export default function CategoriesPage() {
                   </thead>
                   <tbody className="divide-y divide-slate-800">
                     {products.map(product => {
-                      const primary = product.images.find(i => i.isPrimary) ?? product.images[0]
+                      const img = product.images.find(i => i.isPrimary) ?? product.images[0]
                       return (
-                        <tr
-                          key={product.id}
-                          onClick={() => setSelectedProduct(product)}
-                          className="hover:bg-slate-800/60 cursor-pointer transition-colors"
-                        >
+                        <tr key={product.id} onClick={() => setSelectedProduct(product)}
+                          className="hover:bg-slate-800/60 cursor-pointer transition-colors">
                           <td className="px-4 py-3">
-                            {primary
-                              ? <img src={primary.url} className="w-12 h-12 object-cover rounded-lg" />
-                              : <div className="w-12 h-12 bg-slate-700 rounded-lg" />
-                            }
+                            {img ? <img src={img.url} className="w-12 h-12 object-cover rounded-lg" />
+                                 : <div className="w-12 h-12 bg-slate-700 rounded-lg" />}
                           </td>
                           <td className="px-4 py-3 font-medium">{product.title}</td>
                           <td className="px-4 py-3">
                             {product.discountEnabled && product.finalPrice ? (
                               <div>
-                                <div className="font-medium">{formatPrice(product.finalPrice)}</div>
-                                <div className="text-white/30 line-through text-xs">{formatPrice(product.price)}</div>
+                                <div className="font-medium">{fmt(product.finalPrice)}</div>
+                                <div className="text-white/30 line-through text-xs">{fmt(product.price)}</div>
                               </div>
-                            ) : formatPrice(product.price)}
+                            ) : fmt(product.price)}
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex gap-1 flex-wrap">
                               {product.sizes.slice(0, 3).map(s => (
-                                <span key={s} className="bg-slate-800 border border-slate-700 text-white/60 text-xs px-2 py-0.5 rounded">
-                                  {s}
-                                </span>
+                                <span key={s} className="bg-slate-800 border border-slate-700 text-white/60 text-xs px-2 py-0.5 rounded">{s}</span>
                               ))}
-                              {product.sizes.length > 3 && (
-                                <span className="text-white/30 text-xs">+{product.sizes.length - 3}</span>
-                              )}
+                              {product.sizes.length > 3 && <span className="text-white/30 text-xs">+{product.sizes.length - 3}</span>}
                             </div>
                           </td>
                           <td className="px-4 py-3">
@@ -227,9 +244,7 @@ export default function CategoriesPage() {
                               product.status === "active"
                                 ? "bg-green-500/10 text-green-400 border-green-500/30"
                                 : "bg-red-500/10 text-red-400 border-red-500/30"
-                            }`}>
-                              {product.status}
-                            </span>
+                            }`}>{product.status}</span>
                           </td>
                         </tr>
                       )
@@ -238,64 +253,102 @@ export default function CategoriesPage() {
                 </table>
               </div>
 
-              {/* Mobile card list */}
+              {/* Mobile cards */}
               <div className="md:hidden space-y-3">
                 {products.map(product => {
-                  const primary = product.images.find(i => i.isPrimary) ?? product.images[0]
+                  const img = product.images.find(i => i.isPrimary) ?? product.images[0]
                   return (
-                    <div
-                      key={product.id}
-                      onClick={() => setSelectedProduct(product)}
-                      className="flex items-center gap-3 bg-slate-800/60 border border-slate-700 rounded-xl p-3 cursor-pointer active:bg-slate-700 transition-colors"
-                    >
-                      {primary
-                        ? <img src={primary.url} className="w-16 h-16 object-cover rounded-lg flex-shrink-0" />
-                        : <div className="w-16 h-16 bg-slate-700 rounded-lg flex-shrink-0" />
-                      }
+                    <div key={product.id} onClick={() => setSelectedProduct(product)}
+                      className="flex items-center gap-3 bg-slate-800/60 border border-slate-700 rounded-xl p-3 cursor-pointer active:bg-slate-700 transition-colors">
+                      {img ? <img src={img.url} className="w-16 h-16 object-cover rounded-lg flex-shrink-0" />
+                           : <div className="w-16 h-16 bg-slate-700 rounded-lg flex-shrink-0" />}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="font-medium text-white text-sm truncate">{product.title}</p>
-                          <span className={`flex-shrink-0 text-xs px-2 py-0.5 rounded-full border ${
-                            product.status === "active"
-                              ? "bg-green-500/10 text-green-400 border-green-500/30"
-                              : "bg-red-500/10 text-red-400 border-red-500/30"
-                          }`}>
-                            {product.status}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          {product.discountEnabled && product.finalPrice ? (
-                            <>
-                              <span className="text-white font-semibold text-sm">{formatPrice(product.finalPrice)}</span>
-                              <span className="text-white/30 line-through text-xs">{formatPrice(product.price)}</span>
-                            </>
-                          ) : (
-                            <span className="text-white/80 text-sm">{formatPrice(product.price)}</span>
-                          )}
-                        </div>
+                        <p className="font-medium text-white text-sm truncate">{product.title}</p>
+                        <p className="text-white/60 text-sm mt-0.5">
+                          {product.discountEnabled && product.finalPrice ? fmt(product.finalPrice) : fmt(product.price)}
+                        </p>
                         {product.sizes.length > 0 && (
-                          <div className="flex gap-1 mt-1.5 flex-wrap">
+                          <div className="flex gap-1 mt-1 flex-wrap">
                             {product.sizes.slice(0, 3).map(s => (
-                              <span key={s} className="bg-slate-700 border border-slate-600 text-white/50 text-xs px-1.5 py-0.5 rounded">
-                                {s}
-                              </span>
+                              <span key={s} className="bg-slate-700 text-white/50 text-xs px-1.5 py-0.5 rounded">{s}</span>
                             ))}
-                            {product.sizes.length > 3 && (
-                              <span className="text-white/30 text-xs">+{product.sizes.length - 3}</span>
-                            )}
                           </div>
                         )}
                       </div>
+                      <span className={`text-xs px-2 py-0.5 rounded-full border flex-shrink-0 ${
+                        product.status === "active"
+                          ? "bg-green-500/10 text-green-400 border-green-500/30"
+                          : "bg-red-500/10 text-red-400 border-red-500/30"
+                      }`}>{product.status}</span>
                     </div>
                   )
                 })}
               </div>
             </>
           )}
-        </div>
+        </>
       )}
+    </div>
+  )
 
-      <ProductDetailModal product={selectedProduct} onClose={() => setSelectedProduct(null)} onUpdated={(p) => setProducts(prev => prev.map(x => x.id === p.id ? p : x))} categories={allCategories} />
+  return (
+    <div className="py-4 px-1 md:p-6 min-h-screen">
+
+      {/* Header */}
+      <div className="flex items-center justify-between mb-5">
+        <h1 className="text-xl md:text-2xl font-bold text-white">Categories</h1>
+        <AddCategoryModal onSuccess={fetchCategories} />
+      </div>
+
+      {/* Layout */}
+      <div className="flex gap-5">
+
+        {/* ── Tree sidebar ── */}
+        <div className={`${showProducts ? "hidden md:block" : "block"} w-full md:w-46 lg:w-46 flex-shrink-0`}>
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden">
+            {loading ? (
+              <div className="p-3 space-y-1.5">
+                {[1,2,3,4,5].map(i => <div key={i} className="h-8 bg-slate-800 rounded-lg animate-pulse" />)}
+              </div>
+            ) : categories.length === 0 ? (
+              <div className="p-6 text-center text-white/30 text-sm space-y-2">
+                <FolderOpen size={28} className="mx-auto opacity-30" />
+                <p>Category байхгүй</p>
+              </div>
+            ) : (
+              <div className="p-2 space-y-0.5">
+                {categories.map(cat => <TreeRow key={cat.id} cat={cat} />)}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── Products panel ── */}
+        <div className={`${showProducts ? "block" : "hidden md:block"} flex-1 min-w-0`}>
+          <ProductsPanel />
+        </div>
+      </div>
+
+      {/* Modals */}
+      {selectedProduct && !editingProduct && (
+        <ProductDetailModal
+          product={selectedProduct}
+          onClose={() => setSelectedProduct(null)}
+          onEdit={() => setEditingProduct(selectedProduct)}
+          onUpdated={p => { setProducts(prev => prev.map(x => x.id === p.id ? p : x)); setSelectedProduct(p) }}
+          onDeleted={() => { setProducts(prev => prev.filter(p => p.id !== selectedProduct.id)); setSelectedProduct(null) }}
+          categories={allCategories}
+        />
+      )}
+      {editingProduct && (
+        <EditProductDrawer
+          product={editingProduct}
+          categories={allCategories}
+          onClose={() => setEditingProduct(null)}
+          onSuccess={updated => { setProducts(prev => prev.map(x => x.id === updated.id ? updated : x)); setSelectedProduct(updated); setEditingProduct(null) }}
+          onDeleted={() => { setProducts(prev => prev.filter(p => p.id !== editingProduct.id)); setEditingProduct(null); setSelectedProduct(null) }}
+        />
+      )}
     </div>
   )
 }
