@@ -22,8 +22,9 @@ interface Props {
   onDeleted?: (id: string) => void
 }
 
-const SIZE_OPTIONS  = ["XS","S","M","L","XL","2XL","3XL"]
-const COLOR_OPTIONS = ["black","white","red","blue","green","yellow","gray","pink"]
+const SIZE_OPTIONS  = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"]
+const COLOR_OPTIONS = ["Хар", "Цагаан", "Саарал", "Улаан", "Цэнхэр", "Ногоон", "Шар", "Улбар шар", "Ягаан"]
+
 
 export default function EditProductDrawer({ product, categories, onClose, onSuccess, onDeleted }: Props) {
   const { toasts, remove, success, error } = useToast()
@@ -51,6 +52,7 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
   const [images,        setImages]        = useState(product.images ?? [])
   const [variants,      setVariants]      = useState<VariantOption[]>(product.variants ?? [])
   const [varLoading,    setVarLoading]    = useState(false)
+  const [variantInputs, setVariantInputs] = useState<Record<string, string>>({})
 
   useEffect(() => {
     // variants татах
@@ -59,6 +61,14 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
       .then(d => setVariants(d.data ?? []))
   }, [product.id])
 
+  useEffect(() => {
+    const map: Record<string, string> = {}
+    variants.forEach(v => {
+      map[v.id] = v.values.join(", ")
+    })
+    setVariantInputs(map)
+  }, [variants])
+
   const saveVariants = async (newVariants: VariantOption[]) => {
     setVarLoading(true)
     await fetch(`/api/products/${product.id}/variants`, {
@@ -66,21 +76,37 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ variants: newVariants }),
     })
+    success("Variants амжилттай хадгалагдлаа!")
     setVarLoading(false)
   }
 
   const addVariant = () => {
-    const newV = { id: `temp-${Date.now()}`, label: "", values: [], order: variants.length }
-    setVariants(prev => [...prev, newV])
+    const newV = {
+      id: `temp-${Date.now()}`,
+      label: "",
+      values: [],
+      order: variants.length
+    }
+    const newVariants = [...variants, newV]
+    setVariants(newVariants)
+    saveVariants(newVariants) // 🔥 нэм
   }
 
   const updateVariantLabel = (id: string, label: string) => {
-    setVariants(prev => prev.map(v => v.id === id ? { ...v, label } : v))
+    const newVariants = variants.map(v =>
+      v.id === id ? { ...v, label } : v
+    )
+    setVariants(newVariants)
+    saveVariants(newVariants) // 🔥 нэм
   }
 
   const updateVariantValues = (id: string, raw: string) => {
     const values = raw.split(",").map(s => s.trim()).filter(Boolean)
-    setVariants(prev => prev.map(v => v.id === id ? { ...v, values } : v))
+    const newVariants = variants.map(v =>
+      v.id === id ? { ...v, values } : v
+    )
+    setVariants(newVariants)
+    saveVariants(newVariants) // 🔥 нэм
   }
 
   const removeVariant = (id: string) => {
@@ -247,6 +273,74 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
               </div>
             </div>
 
+            {/* ── Custom Variants ── */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-white">Custom Variants</Label>
+                <button onClick={addVariant}
+                  className="flex items-center gap-1 text-xs text-white/40 hover:text-white px-2 py-1 rounded-lg hover:bg-slate-700 transition-colors">
+                  <Plus size={12} /> Нэмэх
+                </button>
+              </div>
+              <p className="text-white/30 text-xs">Sizes/Colors-оос гадна нэмэлт сонголт. Жишээ: Хамгаалалт → Байгаа, Байхгүй</p>
+              {variants.length === 0 ? (
+                <p className="text-white/20 text-xs text-center py-3">Variant байхгүй</p>
+              ) : (
+                <div className="space-y-2">
+                  {variants.map(v => (
+                    <div key={v.id} className="bg-slate-800/60 border border-slate-700 rounded-xl p-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <input
+                          value={v.label}
+                          onChange={e => updateVariantLabel(v.id, e.target.value)}
+                          placeholder="Label (жишээ: Хамгаалалт)"
+                          className="flex-1 bg-slate-700 border border-slate-600 text-white text-sm px-2.5 py-2 rounded-lg outline-none focus:border-violet-500"
+                        />
+                        <button onClick={() => removeVariant(v.id)}
+                          className="text-white/30 hover:text-red-400 p-1 transition-colors">
+                          <X size={14} />
+                        </button>
+                      </div>
+                      <input
+                        value={variantInputs[v.id] ?? ""}
+                        onChange={e => {
+                          const val = e.target.value
+                          setVariantInputs(prev => ({
+                            ...prev,
+                            [v.id]: val
+                          }))
+                        }}
+                        onBlur={() => {
+                          const raw = variantInputs[v.id] || ""
+                          const values = raw.split(",").map(s => s.trim()).filter(Boolean)
+                          const newVariants = variants.map(vr =>
+                            vr.id === v.id ? { ...vr, values } : vr
+                          )
+                          setVariants(newVariants)
+                          saveVariants(newVariants)
+                        }}
+                        placeholder="Утгууд таслалаар (жишээ: Байгаа, Байхгүй)"
+                        className="w-full bg-slate-700 border border-slate-600 text-white text-xs px-2.5 py-1.5 rounded-lg outline-none focus:border-violet-500"
+                      />
+                      {v.values.length > 0 && (
+                        <div className="flex gap-1 flex-wrap">
+                          {v.values.map(val => (
+                            <span key={val} className="bg-slate-700 text-white/60 text-xs px-2 py-0.5 rounded-full">{val}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => saveVariants(variants)}
+                    disabled={varLoading}
+                    className="w-full text-xs py-2 border border-slate-600 hover:border-slate-500 text-white/50 hover:text-white rounded-xl transition-colors flex items-center justify-center gap-1.5">
+                    {varLoading ? <><Loader2 size={12} className="animate-spin" /> Хадгалж байна...</> : "Variants хадгалах"}
+                  </button>
+                </div>
+              )}
+            </div>
+
             {/* Price */}
             <div className="space-y-2">
               <Label>Price</Label>
@@ -289,60 +383,6 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
                 </div>
               </div>
             )}
-
-            {/* ── Custom Variants ── */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-white">Custom Variants</Label>
-                <button onClick={addVariant}
-                  className="flex items-center gap-1 text-xs text-white/40 hover:text-white px-2 py-1 rounded-lg hover:bg-slate-700 transition-colors">
-                  <Plus size={12} /> Нэмэх
-                </button>
-              </div>
-              <p className="text-white/30 text-xs">Sizes/Colors-оос гадна нэмэлт сонголт. Жишээ: Хамгаалалт → Байгаа, Байхгүй</p>
-              {variants.length === 0 ? (
-                <p className="text-white/20 text-xs text-center py-3">Variant байхгүй</p>
-              ) : (
-                <div className="space-y-2">
-                  {variants.map(v => (
-                    <div key={v.id} className="bg-slate-800/60 border border-slate-700 rounded-xl p-3 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <input
-                          value={v.label}
-                          onChange={e => updateVariantLabel(v.id, e.target.value)}
-                          placeholder="Label (жишээ: Хамгаалалт)"
-                          className="flex-1 bg-slate-700 border border-slate-600 text-white text-sm px-2.5 py-1.5 rounded-lg outline-none focus:border-violet-500"
-                        />
-                        <button onClick={() => removeVariant(v.id)}
-                          className="text-white/30 hover:text-red-400 p-1 transition-colors">
-                          <X size={14} />
-                        </button>
-                      </div>
-                      <input
-                        value={v.values.join(", ")}
-                        onChange={e => updateVariantValues(v.id, e.target.value)}
-                        placeholder="Утгууд таслалаар (жишээ: Байгаа, Байхгүй)"
-                        className="w-full bg-slate-700 border border-slate-600 text-white text-xs px-2.5 py-1.5 rounded-lg outline-none focus:border-violet-500"
-                      />
-                      {v.values.length > 0 && (
-                        <div className="flex gap-1 flex-wrap">
-                          {v.values.map(val => (
-                            <span key={val} className="bg-slate-700 text-white/60 text-xs px-2 py-0.5 rounded-full">{val}</span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                  <button
-                    onClick={() => saveVariants(variants)}
-                    disabled={varLoading}
-                    className="w-full text-xs py-2 border border-slate-600 hover:border-slate-500 text-white/50 hover:text-white rounded-xl transition-colors flex items-center justify-center gap-1.5">
-                    {varLoading ? <><Loader2 size={12} className="animate-spin" /> Хадгалж байна...</> : "Variants хадгалах"}
-                  </button>
-                </div>
-              )}
-            </div>
-
             {/* ── Зургийн variant color ── */}
             {images.length > 0 && (
               <div className="space-y-2">

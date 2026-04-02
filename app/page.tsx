@@ -35,7 +35,7 @@ export default function Home() {
         
         {/* Title */}
         <h1 className="text-2xl font-bold text-white text-center mb-2">
-          Admin Panel
+          FATE Admin Dashboard
         </h1>
         <p className="text-gray-400 text-center mb-6">
           Нэвтэрч орно уу
@@ -46,7 +46,7 @@ export default function Home() {
           <label className="text-sm text-gray-400">Username</label>
           <input
             type="text"
-            placeholder="admin"
+            placeholder="username"
             className="w-full mt-1 p-3 rounded-lg bg-white/10 border border-white/10 text-white focus:outline-none focus:ring-2 focus:ring-white/30"
             onChange={(e) => setUsername(e.target.value)}
           />

@@ -22,19 +22,6 @@ export async function GET(req: NextRequest) {
 }
 
 // ─── POST /api/orders ─────────────────────────────────────────────────────────
-/*
-  Body (JSON):
-  {
-    customerName: string
-    phone: string
-    email: string
-    shippingAddress: string
-    items: [
-      { productId: string, size?: string, color?: string, quantity: number }
-    ]
-    couponCode?: string
-  }
-*/
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -43,7 +30,7 @@ export async function POST(req: NextRequest) {
       phone: string;
       email: string;
       shippingAddress: string;
-      items: { productId: string; size?: string; color?: string; quantity: number }[];
+      items: { productId: string; size?: string; color?: string; quantity: number; variants?: Record<string, string>; }[];
       couponCode?: string;
     };
 
@@ -107,6 +94,7 @@ export async function POST(req: NextRequest) {
               color:     item.color,
               quantity:  item.quantity,
               unitPrice,
+              variants:  item.variants,
             };
           }),
         },

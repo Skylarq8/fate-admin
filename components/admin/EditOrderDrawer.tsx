@@ -24,6 +24,7 @@ interface CatalogProduct {
   sizes: string[]
   colors: string[]
   images: ProductImage[]
+  variants?: Record<string, string>
 }
 
 interface OrderItem {
@@ -33,6 +34,7 @@ interface OrderItem {
   size: string | null
   color: string | null
   product: CatalogProduct
+  variants?: Record<string, string>
 }
 
 export interface Order {
@@ -52,6 +54,7 @@ interface CartItem {
   quantity: number
   size: string
   color: string
+  variants?: Record<string, string>
 }
 
 interface Props {
@@ -91,6 +94,7 @@ export default function EditOrderDrawer({ order, onClose, onSuccess, onDeleted }
       quantity: item.quantity,
       size:     item.size  ?? "",
       color:    item.color ?? "",
+      variants: item.variants ?? {}
     }))
   )
   const searchRef = useRef<HTMLDivElement>(null)
@@ -117,7 +121,13 @@ export default function EditOrderDrawer({ order, onClose, onSuccess, onDeleted }
     setCart(prev => {
       const existing = prev.find(c => c.product.id === product.id)
       if (existing) return prev.map(c => c.product.id === product.id ? { ...c, quantity: c.quantity + 1 } : c)
-      return [...prev, { product, quantity: 1, size: product.sizes[0] ?? "", color: product.colors[0] ?? "" }]
+      const defaultVariants = product.variants ? {...product.variants} : {}
+      return [...prev, { 
+        product, quantity: 1, 
+        size: product.sizes[0] ?? "", 
+        color: product.colors[0] ?? "", 
+        variants: defaultVariants,
+      }]
     })
     setSearchQuery(""); setSearchOpen(false)
   }
@@ -131,6 +141,9 @@ export default function EditOrderDrawer({ order, onClose, onSuccess, onDeleted }
 
   const updateSize  = (id: string, size: string)  => setCart(prev => prev.map(c => c.product.id === id ? { ...c, size }  : c))
   const updateColor = (id: string, color: string) => setCart(prev => prev.map(c => c.product.id === id ? { ...c, color } : c))
+  const updateVariants = (id: string, newVariants: Record<string, string>) => {
+    setCart(prev => prev.map(c => c.product.id === id ? { ...c, variants: newVariants } : c))
+  }
 
   // ── delete ───────────────────────────────────────────────────────────────
   const handleDelete = async () => {
@@ -172,6 +185,7 @@ export default function EditOrderDrawer({ order, onClose, onSuccess, onDeleted }
             quantity:  c.quantity,
             size:      c.size  || undefined,
             color:     c.color || undefined,
+            variants:  c.variants && Object.keys(c.variants).length > 0 ? c.variants : undefined,
           })),
         }),
       })

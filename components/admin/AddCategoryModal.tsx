@@ -123,10 +123,13 @@ export default function AddCategoryModal({ onSuccess }: Props) {
                   className="w-full bg-slate-800 border border-slate-700 text-white text-sm rounded-md px-3 py-2 pr-8 appearance-none focus:outline-none focus:ring-1 focus:ring-slate-500"
                 >
                   <option value="">— Root category —</option>
-                  {flatCats.map(cat => (
-                    <option key={cat.id} value={cat.id}>
-                      {getLabel(cat)}
-                    </option>
+                  {flatCats
+                    .slice()
+                    .reverse()
+                    .map(cat => (
+                      <option key={cat.id} value={cat.id}>
+                        {getLabel(cat)}
+                      </option>
                   ))}
                 </select>
                 <ChevronDown

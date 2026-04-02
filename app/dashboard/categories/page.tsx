@@ -165,7 +165,7 @@ export default function CategoriesPage() {
         </div>
 
         {/* children */}
-        {isExpanded && cat.children?.map(child => (
+        {isExpanded && cat.children?.slice().reverse().map(child => (
           <TreeRow key={child.id} cat={child} depth={depth + 1} />
         ))}
       </div>
@@ -317,7 +317,11 @@ export default function CategoriesPage() {
               </div>
             ) : (
               <div className="p-2 space-y-0.5">
-                {categories.map(cat => <TreeRow key={cat.id} cat={cat} />)}
+                {categories
+                  .slice()
+                  .reverse()
+                  .map(cat => <TreeRow key={cat.id} cat={cat} />)
+                }
               </div>
             )}
           </div>

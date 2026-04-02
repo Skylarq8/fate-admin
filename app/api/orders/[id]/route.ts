@@ -2,6 +2,7 @@
 import { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { ok, fail } from "@/lib/api-response"
+import { Prisma } from "@prisma/client";
 
 type Ctx = { params: Promise<{ id: string }> }
 
@@ -31,7 +32,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
       phone?: string
       email?: string
       shippingAddress?: string
-      items?: { productId: string; quantity: number; size?: string; color?: string }[]
+      items?: { productId: string; quantity: number; size?: string; color?: string; variants?: Record<string,string> }[]
     }
 
     const allowed = ["pending", "confirmed", "delivered"]
@@ -74,6 +75,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
                 size:      item.size  ?? null,
                 color:     item.color ?? null,
                 unitPrice,
+                variants: item.variants ? item.variants : Prisma.JsonNull,
               }
             }),
           },

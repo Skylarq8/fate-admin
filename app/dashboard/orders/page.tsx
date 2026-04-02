@@ -134,14 +134,45 @@ function OrderDetailModal({ order: initial, onClose, onUpdated, onDeleted }: {
                   {img ? <img src={img.url} className="w-14 h-14 object-cover rounded-lg flex-shrink-0" />
                        : <div className="w-14 h-14 bg-slate-700 rounded-lg flex-shrink-0" />}
                   <div className="flex-1 min-w-0">
-                    <p className="text-white text-sm font-medium truncate">{item.product.title}</p>
-                    <div className="flex gap-1.5 mt-1 flex-wrap">
-                      {item.size  && <span className="bg-slate-700 text-white/50 text-xs px-2 py-0.5 rounded">{item.size}</span>}
-                      {item.color && <span className="bg-slate-700 text-white/50 text-xs px-2 py-0.5 rounded capitalize">{item.color}</span>}
-                      <span className="bg-slate-700 text-white/50 text-xs px-2 py-0.5 rounded">{item.quantity} ширхэг</span>
-                    </div>
-                    <p className="text-white/40 text-xs mt-1">{fmt(item.unitPrice)} × {item.quantity}</p>
+                  <p className="text-white text-sm font-medium truncate">{item.product.title}</p>
+                  <div className="flex gap-1.5 mt-1 flex-wrap">
+                    {/* Size */}
+                    {item.size && (
+                      <span className="bg-slate-700 text-white/80 text-xs px-2 py-0.5 rounded">
+                        {item.size}
+                      </span>
+                    )}
+
+                    {/* Color */}
+                    {item.color && (
+                      <span className="bg-slate-700 text-white/80 text-xs px-2 py-0.5 rounded capitalize">
+                        {item.color}
+                      </span>
+                    )}
+
+                    {/* Variants */}
+                    {item.variants && Array.isArray(item.variants) && item.variants.map((variantObj, idx) =>
+                      Object.entries(variantObj).map(([key, val]) => (
+                        <span
+                          key={`${idx}-${key}`}
+                          className="bg-slate-700 text-white/80 text-xs px-2 py-0.5 rounded capitalize"
+                        >
+                          {key}: {String(val)} {/* unknown → string болгож ReactNode-д тохируулсан */}
+                        </span>
+                      ))
+                    )}
+
+                    {/* Quantity */}
+                    <span className="bg-slate-700 text-white/80 text-xs px-2 py-0.5 rounded">
+                      {item.quantity} ширхэг
+                    </span>
                   </div>
+
+                  {/* Unit Price */}
+                  <p className="text-white/80 text-xs mt-1">
+                    {fmt(item.unitPrice)} × {item.quantity}
+                  </p>
+                </div>
                   <p className="text-white font-semibold text-sm flex-shrink-0">{fmt(item.unitPrice * item.quantity)}</p>
                 </div>
               )
@@ -150,7 +181,7 @@ function OrderDetailModal({ order: initial, onClose, onUpdated, onDeleted }: {
 
           {/* Total */}
           <div className="flex justify-between items-center border-t border-slate-700 pt-4">
-            <span className="text-white/60 text-sm">Нийт дүн</span>
+            <span className="text-white/80 text-sm">Нийт дүн</span>
             <span className="text-white text-xl font-bold">{fmt(order.totalAmount)}</span>
           </div>
         </div>
@@ -256,13 +287,14 @@ export default function OrdersPage() {
       ) : (
         <>
           {/* Desktop table */}
-          <div className="hidden md:block rounded-xl border border-slate-700 overflow-hidden">
+          <div className="hidden md:block rounded-xl border border-slate-700 overflow-visible">
             <table className="w-full text-sm text-white">
               <thead className="bg-slate-800 text-white/50 text-xs uppercase">
                 <tr>
                   <th className="px-4 py-3 text-left">ID</th>
                   <th className="px-4 py-3 text-left">Нэр</th>
                   <th className="px-4 py-3 text-left">Утас</th>
+                  <th className="px-4 py-3 text-left">Хүргэлтийн хаяг</th>
                   <th className="px-4 py-3 text-left">Нийт дүн</th>
                   <th className="px-4 py-3 text-left">Статус</th>
                 </tr>
@@ -274,7 +306,8 @@ export default function OrdersPage() {
                       #{order.id.slice(-8).toUpperCase()}
                     </td>
                     <td className="px-4 py-3 font-medium cursor-pointer" onClick={() => setSelected(order)}>{order.customerName}</td>
-                    <td className="px-4 py-3 text-white/60 cursor-pointer" onClick={() => setSelected(order)}>{order.phone}</td>
+                    <td className="px-4 py-3 cursor-pointer" onClick={() => setSelected(order)}>{order.phone}</td>
+                    <td className="px-4 py-3cursor-pointer" onClick={() => setSelected(order)}>{order.shippingAddress}</td>
                     <td className="px-4 py-3 font-semibold cursor-pointer" onClick={() => setSelected(order)}>{fmt(order.totalAmount)}</td>
                     <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                       <StatusDropdown order={order} onUpdated={handleUpdated} onToast={(msg, type) => type === "success" ? success(msg) : error(msg)} />
@@ -293,7 +326,7 @@ export default function OrdersPage() {
                   <div>
                     <p className="text-white/30 text-xs font-mono">#{order.id.slice(-8).toUpperCase()}</p>
                     <p className="text-white font-medium mt-0.5">{order.customerName}</p>
-                    <p className="text-white/50 text-xs mt-0.5">{order.phone}</p>
+                    <p className="text-white/80 text-xs mt-0.5">{order.phone}</p>
                   </div>
                   <p className="text-white font-semibold text-sm flex-shrink-0">{fmt(order.totalAmount)}</p>
                 </div>

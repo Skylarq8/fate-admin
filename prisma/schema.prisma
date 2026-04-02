@@ -120,6 +120,7 @@ model OrderItem {
   color     String?
   quantity  Int     @default(1)
   unitPrice Float
+  variants  Json?
 
   order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product   Product @relation(fields: [productId], references: [id])

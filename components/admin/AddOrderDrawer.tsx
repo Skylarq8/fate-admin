@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { ToastContainer } from "@/components/ui/toast"
 import { useToast } from "@/hooks/useToast"
 import { Loader2, Package, Trash2, X } from "lucide-react"
+import { VariantOption } from "./ProductDetailModal"
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 interface ProductImage { id: string; url: string; isPrimary: boolean }
@@ -22,6 +23,7 @@ interface CatalogProduct {
   sizes: string[]
   colors: string[]
   images: ProductImage[]
+  variants?: VariantOption[]
 }
 
 interface CartItem {
@@ -29,6 +31,7 @@ interface CartItem {
   quantity: number
   size: string
   color: string
+  selectedVariants: { [key: string]: string }
 }
 
 interface Props {
@@ -86,11 +89,50 @@ export default function AddOrderDrawer({ onSuccess }: Props) {
   const addToCart = (product: CatalogProduct) => {
     setCart(prev => {
       const existing = prev.find(c => c.product.id === product.id)
-      if (existing) return prev.map(c => c.product.id === product.id ? { ...c, quantity: c.quantity + 1 } : c)
-      return [...prev, { product, quantity: 1, size: product.sizes[0] ?? "", color: product.colors[0] ?? "" }]
+      if (existing) {
+        return prev.map(c =>
+          c.product.id === product.id
+            ? { ...c, quantity: c.quantity + 1 }
+            : c
+        )
+      }
+      // 👇 default variant values
+      const defaultVariants: Record<string, string> = {}
+        product.variants?.forEach(v => {
+          if (v.values.length > 0) {
+            defaultVariants[v.label] = v.values[0]
+          }
+      })
+      return [
+        ...prev,
+        {
+          product,
+          quantity: 1,
+          size: product.sizes[0] ?? "",
+          color: product.colors[0] ?? "",
+          selectedVariants: defaultVariants, // 👈 ADD
+        },
+      ]
     })
+
     setSearchQuery("")
     setSearchOpen(false)
+  }
+
+  const updateVariant = (id: string, label: string, value: string) => {
+    setCart(prev =>
+      prev.map(c =>
+        c.product.id === id
+          ? {
+              ...c,
+              selectedVariants: {
+                ...c.selectedVariants,
+                [label]: value,
+              },
+            }
+          : c
+      )
+    )
   }
 
   const removeFromCart = (id: string) => setCart(prev => prev.filter(c => c.product.id !== id))
@@ -132,6 +174,9 @@ export default function AddOrderDrawer({ onSuccess }: Props) {
             quantity:  c.quantity,
             size:      c.size  || undefined,
             color:     c.color || undefined,
+            variants: Object.keys(c.selectedVariants).length > 0 
+            ? Object.entries(c.selectedVariants).map(([k,v]) => ({ [k]: v }))
+            : [],
           })),
         }),
       })
@@ -260,13 +305,31 @@ export default function AddOrderDrawer({ onSuccess }: Props) {
                               {item.product.colors.map(c => <option key={c} value={c}>{c}</option>)}
                             </select>
                           )}
+                          {/* ── Variants ── */}
+                          {(item.product.variants ?? []).map((v) => (
+                            <div key={v.id} className="flex items-center gap-2">
+                              <select
+                                value={item.selectedVariants?.[v.label] || ""}
+                                onChange={e =>
+                                  updateVariant(item.product.id, v.label, e.target.value)
+                                }
+                                className="flex-1 bg-slate-700 border border-slate-600 text-white text-xs px-2 py-1.5 rounded-lg"
+                              >
+                                {v.values.map(val => (
+                                  <option key={val} value={val}>
+                                    {val}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          ))}
                           {/* quantity +/- */}
                           <div className="flex items-center gap-1 ml-auto">
                             <button onClick={() => updateQty(item.product.id, item.quantity - 1)}
                               className="w-7 h-7 bg-slate-700 hover:bg-slate-600 text-white rounded-lg flex items-center justify-center text-base leading-none transition-colors">
                               −
                             </button>
-                            <span className="text-white text-sm w-7 text-center">{item.quantity}</span>
+                            <span className="text-white text-sm w-5 text-center">{item.quantity}</span>
                             <button onClick={() => updateQty(item.product.id, item.quantity + 1)}
                               className="w-7 h-7 bg-slate-700 hover:bg-slate-600 text-white rounded-lg flex items-center justify-center text-base leading-none transition-colors">
                               +
