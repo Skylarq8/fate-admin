@@ -71,7 +71,7 @@ export default function OverviewPage() {
 
   return (
     <div className="py-4 px-1 md:p-6 space-y-6">
-      <h1 className="text-xl md:text-2xl font-bold text-white">Overview</h1>
+      <h1 className="text-xl md:text-2xl font-bold text-white">Ерөнхий мэдээлэл</h1>
 
       {/* ── Top stat cards ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

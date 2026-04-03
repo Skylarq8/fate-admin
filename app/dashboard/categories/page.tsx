@@ -296,7 +296,7 @@ export default function CategoriesPage() {
 
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
-        <h1 className="text-xl md:text-2xl font-bold text-white">Categories</h1>
+        <h1 className="text-xl md:text-2xl font-bold text-white">Ангиллууд</h1>
         <AddCategoryModal onSuccess={fetchCategories} />
       </div>
 

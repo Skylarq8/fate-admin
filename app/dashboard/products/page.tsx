@@ -42,7 +42,7 @@ export default function ProductsPage() {
     <div className="py-4 px-1 md:p-6">
       {/* Header */}
       <div className="flex justify-between items-center mb-4 md:mb-6">
-        <h1 className="text-xl md:text-2xl font-bold text-white">Products</h1>
+        <h1 className="text-xl md:text-2xl font-bold text-white">Бараа бүтээгдэхүүн</h1>
         <AddProductDrawer categories={categories} onSuccess={fetchProducts} />
       </div>
 

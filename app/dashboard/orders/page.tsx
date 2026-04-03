@@ -227,7 +227,7 @@ export default function OrdersPage() {
   return (
     <div className="py-4 px-1 md:p-6">
       <div className="flex justify-between items-center mb-4 md:mb-6">
-        <h1 className="text-xl md:text-2xl font-bold text-white">Orders</h1>
+        <h1 className="text-xl md:text-2xl font-bold text-white">Захиалгууд</h1>
         <AddOrderDrawer onSuccess={fetchOrders} />
       </div>
 

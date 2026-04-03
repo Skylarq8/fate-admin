@@ -158,7 +158,7 @@ export default function AnalyticsPage() {
 
   return (
     <div className="py-4 px-1 md:p-6 space-y-6 pb-16">
-      <h1 className="text-xl md:text-2xl font-bold text-white">Analytics</h1>
+      <h1 className="text-xl md:text-2xl font-bold text-white">Статистик</h1>
 
       {/* ── Row 1: Donut + Daily orders ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
