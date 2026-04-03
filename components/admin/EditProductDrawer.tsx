@@ -1,7 +1,7 @@
 // 📁 components/admin/EditProductDrawer.tsx
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,10 +10,22 @@ import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ToastContainer } from "@/components/ui/toast"
 import { useToast } from "@/hooks/useToast"
-import { ChevronDown, X, Loader2, Trash2, Star, ImageIcon, Plus, GripVertical } from "lucide-react"
+import { ChevronDown, X, Loader2, Trash2, Star, ImageIcon, Plus } from "lucide-react"
 import { Product, VariantOption } from "@/components/admin/ProductDetailModal"
 
+// ─────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────
 interface Category { id: string; name: string }
+
+// Local variant type — flat, without DB fields like `id` / `order`
+type Variant = {
+  id: string      // temp-* for new ones, real id for existing
+  label: string
+  values: string[]
+  order: number
+}
+
 interface Props {
   product: Product
   categories: Category[]
@@ -22,10 +34,66 @@ interface Props {
   onDeleted?: (id: string) => void
 }
 
+// ─────────────────────────────────────────────
+// Constants
+// ─────────────────────────────────────────────
 const SIZE_OPTIONS  = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"]
 const COLOR_OPTIONS = ["Хар", "Цагаан", "Саарал", "Улаан", "Цэнхэр", "Ногоон", "Шар", "Улбар шар", "Ягаан"]
 
+// ─────────────────────────────────────────────
+// InlineCustomInput — single-field "Add Custom" input
+// Commits value on Enter or blur; closes on Escape or empty blur
+// ─────────────────────────────────────────────
+interface InlineCustomInputProps {
+  placeholder: string
+  existing: string[]             // to prevent duplicates
+  onCommit: (value: string) => void
+  onClose: () => void
+}
 
+function InlineCustomInput({ placeholder, existing, onCommit, onClose }: InlineCustomInputProps) {
+  const [val, setVal] = useState("")
+  const ref = useRef<HTMLInputElement>(null)
+
+  useEffect(() => { ref.current?.focus() }, [])
+
+  const commit = () => {
+    const trimmed = val.trim()
+    if (trimmed && !existing.includes(trimmed)) {
+      onCommit(trimmed)
+    }
+    onClose()
+  }
+
+  return (
+    <div className="flex items-center gap-2 mt-2">
+      <input
+        ref={ref}
+        value={val}
+        onChange={e => setVal(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === "Enter")  { e.preventDefault(); commit() }
+          if (e.key === "Escape") { onClose() }
+        }}
+        onBlur={commit}
+        placeholder={placeholder}
+        className="flex-1 bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:border-slate-400 placeholder:text-white/20 transition-colors"
+      />
+      <button
+        type="button"
+        onMouseDown={e => e.preventDefault()} // prevent blur before click
+        onClick={onClose}
+        className="text-white/30 hover:text-white/60 transition-colors"
+      >
+        <X size={14} />
+      </button>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────
+// Main Component
+// ─────────────────────────────────────────────
 export default function EditProductDrawer({ product, categories, onClose, onSuccess, onDeleted }: Props) {
   const { toasts, remove, success, error } = useToast()
 
@@ -33,6 +101,7 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
   const parse  = (s: string) => Number(s.replace(/\D/g, ""))
   const fmtInp = (s: string) => { const n = s.replace(/\D/g, ""); return n ? new Intl.NumberFormat("mn-MN").format(Number(n)) : "" }
 
+  // ── Core fields ──
   const [title,           setTitle]           = useState(product.title)
   const [description,     setDescription]     = useState(product.description)
   const [price,           setPrice]           = useState(fmt(product.price))
@@ -41,83 +110,136 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
   const [discountEndsAt,  setDiscountEndsAt]  = useState(
     product.discountEndsAt ? new Date(product.discountEndsAt).toISOString().slice(0, 16) : ""
   )
-  const [status,        setStatus]        = useState<"active" | "inactive">(product.status)
-  const [sizes,         setSizes]         = useState<string[]>(product.sizes)
-  const [colors,        setColors]        = useState<string[]>(product.colors)
+  const [status, setStatus] = useState<"active" | "inactive">(product.status)
+
+  // ── Sizes — predefined selection + custom additions ──
+  // Separate out what came from the product: predefined vs custom
+  const [sizes,           setSizes]           = useState<string[]>(product.sizes)
+  const [customSizes,     setCustomSizes]     = useState<string[]>(
+    // Any size not in SIZE_OPTIONS is already a custom value
+    product.sizes.filter(s => !SIZE_OPTIONS.includes(s))
+  )
+  const [showCustomSize,  setShowCustomSize]  = useState(false)
+
+  // ── Colors — same pattern ──
+  const [colors,          setColors]          = useState<string[]>(product.colors)
+  const [customColors,    setCustomColors]    = useState<string[]>(
+    product.colors.filter(c => !COLOR_OPTIONS.includes(c))
+  )
+  const [showCustomColor, setShowCustomColor] = useState(false)
+
+  // ── All selectable options (predefined + custom) ──
+  const allSizeOptions  = [...SIZE_OPTIONS,  ...customSizes.filter(s => !SIZE_OPTIONS.includes(s))]
+  const allColorOptions = [...COLOR_OPTIONS, ...customColors.filter(c => !COLOR_OPTIONS.includes(c))]
+
+  // ── Categories ──
   const [selectedCats,  setSelectedCats]  = useState<string[]>(product.categories.map(c => c.category.id))
   const [categoryOpen,  setCategoryOpen]  = useState(false)
+
+  // ── UI state ──
   const [loading,       setLoading]       = useState(false)
   const [deleting,      setDeleting]      = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [imgLoading,    setImgLoading]    = useState<string | null>(null)
   const [images,        setImages]        = useState(product.images ?? [])
-  const [variants,      setVariants]      = useState<VariantOption[]>(product.variants ?? [])
-  const [varLoading,    setVarLoading]    = useState(false)
-  const [variantInputs, setVariantInputs] = useState<Record<string, string>>({})
 
+  // ── Variants ──
+  const [variants,   setVariants]   = useState<Variant[]>([])
+  const [varLoading, setVarLoading] = useState(false)
+
+  // Fetch existing variants on mount
   useEffect(() => {
-    // variants татах
     fetch(`/api/products/${product.id}/variants`)
       .then(r => r.json())
       .then(d => setVariants(d.data ?? []))
   }, [product.id])
 
-  useEffect(() => {
-    const map: Record<string, string> = {}
-    variants.forEach(v => {
-      map[v.id] = v.values.join(", ")
-    })
-    setVariantInputs(map)
-  }, [variants])
+  useEffect(() => { setImages(product.images ?? []) }, [product.id])
 
-  const saveVariants = async (newVariants: VariantOption[]) => {
+  // ─────────────────────────────────────────────
+  // Variant persistence
+  // ─────────────────────────────────────────────
+  const saveVariants = async (next: Variant[]) => {
     setVarLoading(true)
     await fetch(`/api/products/${product.id}/variants`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ variants: newVariants }),
+      body: JSON.stringify({ variants: next }),
     })
-    success("Variants амжилттай хадгалагдлаа!")
     setVarLoading(false)
   }
 
+  // ── Variant updaters (mirror AddProductDrawer, but each calls saveVariants) ──
   const addVariant = () => {
-    const newV = {
-      id: `temp-${Date.now()}`,
-      label: "",
-      values: [],
-      order: variants.length
-    }
-    const newVariants = [...variants, newV]
-    setVariants(newVariants)
-    saveVariants(newVariants) // 🔥 нэм
-  }
-
-  const updateVariantLabel = (id: string, label: string) => {
-    const newVariants = variants.map(v =>
-      v.id === id ? { ...v, label } : v
-    )
-    setVariants(newVariants)
-    saveVariants(newVariants) // 🔥 нэм
-  }
-
-  const updateVariantValues = (id: string, raw: string) => {
-    const values = raw.split(",").map(s => s.trim()).filter(Boolean)
-    const newVariants = variants.map(v =>
-      v.id === id ? { ...v, values } : v
-    )
-    setVariants(newVariants)
-    saveVariants(newVariants) // 🔥 нэм
+    const next: Variant[] = [
+      ...variants,
+      { id: `temp-${Date.now()}`, label: "", values: [""], order: variants.length },
+    ]
+    setVariants(next)
+    saveVariants(next)
   }
 
   const removeVariant = (id: string) => {
-    const newV = variants.filter(v => v.id !== id)
-    setVariants(newV)
-    saveVariants(newV)
+    const next = variants.filter(v => v.id !== id)
+    setVariants(next)
+    saveVariants(next)
   }
-  const [imgLoading,    setImgLoading]    = useState<string | null>(null)
 
-  useEffect(() => { setImages(product.images ?? []) }, [product.id])
+  const updateVariantLabel = (id: string, label: string) => {
+    const next = variants.map(v => v.id === id ? { ...v, label } : v)
+    setVariants(next)
+    saveVariants(next)
+  }
 
+  const addVariantValue = (id: string) => {
+    const next = variants.map(v => v.id === id ? { ...v, values: [...v.values, ""] } : v)
+    setVariants(next)
+    saveVariants(next)
+  }
+
+  const updateVariantValue = (id: string, vali: number, text: string) => {
+    const next = variants.map(v =>
+      v.id === id
+        ? { ...v, values: v.values.map((val, j) => j === vali ? text : val) }
+        : v
+    )
+    setVariants(next)
+    // Don't save on every keystroke — save on blur (see input onBlur below)
+  }
+
+  const flushVariantValue = (id: string) => {
+    // Called onBlur to persist the current in-memory state
+    saveVariants(variants)
+  }
+
+  const removeVariantValue = (id: string, vali: number) => {
+    const next = variants.map(v =>
+      v.id === id ? { ...v, values: v.values.filter((_, j) => j !== vali) } : v
+    )
+    setVariants(next)
+    saveVariants(next)
+  }
+
+  // ─────────────────────────────────────────────
+  // Custom size / color helpers
+  // ─────────────────────────────────────────────
+  const addCustomSize = (val: string) => {
+    if (!customSizes.includes(val)) setCustomSizes(prev => [...prev, val])
+    // Auto-select it
+    if (!sizes.includes(val)) setSizes(prev => [...prev, val])
+  }
+
+  const addCustomColor = (val: string) => {
+    if (!customColors.includes(val)) setCustomColors(prev => [...prev, val])
+    if (!colors.includes(val)) setColors(prev => [...prev, val])
+  }
+
+  const toggleChip = (val: string, list: string[], setter: (v: string[]) => void) =>
+    setter(list.includes(val) ? list.filter(v => v !== val) : [...list, val])
+
+  // ─────────────────────────────────────────────
+  // Image handlers
+  // ─────────────────────────────────────────────
   const handleSetPrimary = async (imageId: string) => {
     setImgLoading(imageId)
     await fetch(`/api/products/${product.id}/images/${imageId}`, {
@@ -136,10 +258,9 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
     setImages(prev => prev.map(img => img.id === imageId ? { ...img, variantColor: color } : img))
   }
 
-  const toggleChip = (val: string, list: string[], setter: (v: string[]) => void) =>
-    setter(list.includes(val) ? list.filter(v => v !== val) : [...list, val])
-
-  // ── Delete ────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────
+  // Delete
+  // ─────────────────────────────────────────────
   const handleDelete = async () => {
     setDeleting(true)
     try {
@@ -155,7 +276,9 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
     }
   }
 
-  // ── Save ──────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────
+  // Save
+  // ─────────────────────────────────────────────
   const handleSubmit = async () => {
     if (!title.trim())       return error("Нэр оруулна уу.")
     if (!description.trim()) return error("Тайлбар оруулна уу.")
@@ -172,11 +295,12 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
     formData.append("price",           String(parse(price)))
     formData.append("status",          status)
     formData.append("discountEnabled", String(discountEnabled))
+    // sizes/colors already include custom values via allSizeOptions/allColorOptions selection
     formData.append("sizes",           JSON.stringify(sizes))
     formData.append("colors",          JSON.stringify(colors))
     formData.append("categories",      JSON.stringify(selectedCats))
     if (discountEnabled) {
-      formData.append("finalPrice",    String(parse(finalPrice)))
+      formData.append("finalPrice",     String(parse(finalPrice)))
       formData.append("discountEndsAt", new Date(discountEndsAt).toISOString())
     }
 
@@ -194,30 +318,36 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
     }
   }
 
+  // ─────────────────────────────────────────────
+  // Render
+  // ─────────────────────────────────────────────
   return (
     <>
       <Sheet open onOpenChange={v => { if (!v) onClose() }}>
-        <SheetContent side="right" className="w-full sm:w-[440px] overflow-y-auto bg-slate-900 text-white border-slate-700"
-          onOpenAutoFocus={e => e.preventDefault()}>
+        <SheetContent
+          side="right"
+          className="w-full sm:w-[440px] overflow-y-auto bg-slate-900 text-white border-slate-700"
+          onOpenAutoFocus={e => e.preventDefault()}
+        >
           <SheetHeader className="px-5 pb-4">
             <SheetTitle className="text-white text-lg">Edit Product</SheetTitle>
           </SheetHeader>
 
           <div className="space-y-4 px-5 pb-8">
 
-            {/* Name */}
+            {/* ── Name ── */}
             <div className="space-y-2">
               <Label>Name</Label>
               <Input value={title} onChange={e => setTitle(e.target.value)} />
             </div>
 
-            {/* Description */}
+            {/* ── Description ── */}
             <div className="space-y-2">
               <Label>Description</Label>
               <Textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} />
             </div>
 
-            {/* Categories */}
+            {/* ── Categories ── */}
             <div className="space-y-1">
               <Label>Category</Label>
               <div className="flex flex-wrap gap-2">
@@ -231,15 +361,21 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
                   )
                 })}
               </div>
-              <button type="button" onClick={() => setCategoryOpen(!categoryOpen)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 flex items-center justify-between text-white/40 text-sm">
+              <button
+                type="button"
+                onClick={() => setCategoryOpen(!categoryOpen)}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 flex items-center justify-between text-white/40 text-sm"
+              >
                 Add category <ChevronDown size={14} />
               </button>
               {categoryOpen && (
                 <div className="border border-slate-700 rounded-lg bg-slate-800 max-h-40 overflow-y-auto p-2 space-y-1">
                   {categories.map(cat => (
                     <label key={cat.id} className="flex items-center space-x-2 cursor-pointer hover:bg-slate-700 p-1 rounded">
-                      <Checkbox checked={selectedCats.includes(cat.id)} onCheckedChange={() => toggleChip(cat.id, selectedCats, setSelectedCats)} />
+                      <Checkbox
+                        checked={selectedCats.includes(cat.id)}
+                        onCheckedChange={() => toggleChip(cat.id, selectedCats, setSelectedCats)}
+                      />
                       <span className="text-sm">{cat.name}</span>
                     </label>
                   ))}
@@ -247,101 +383,174 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
               )}
             </div>
 
-            {/* Sizes */}
+            {/* ── Sizes ── */}
             <div className="space-y-2">
               <Label>Sizes</Label>
-              <div className="flex flex-wrap gap-2">
-                {SIZE_OPTIONS.map(s => (
-                  <button key={s} type="button" onClick={() => toggleChip(s, sizes, setSizes)}
-                    className={`px-3 py-1 rounded-md text-sm border transition-colors ${
-                      sizes.includes(s) ? "bg-white text-slate-900 border-white" : "bg-slate-800 border-slate-700 text-white/60"
-                    }`}>{s}</button>
-                ))}
-              </div>
-            </div>
 
-            {/* Colors */}
-            <div className="space-y-2">
-              <Label>Colors</Label>
+              {/* All chips: predefined + custom */}
               <div className="flex flex-wrap gap-2">
-                {COLOR_OPTIONS.map(c => (
-                  <button key={c} type="button" onClick={() => toggleChip(c, colors, setColors)}
-                    className={`px-3 py-1 rounded-md text-sm border capitalize transition-colors ${
-                      colors.includes(c) ? "bg-white text-slate-900 border-white" : "bg-slate-800 border-slate-700 text-white/60"
-                    }`}>{c}</button>
-                ))}
-              </div>
-            </div>
-
-            {/* ── Custom Variants ── */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-white">Custom Variants</Label>
-                <button onClick={addVariant}
-                  className="flex items-center gap-1 text-xs text-white/40 hover:text-white px-2 py-1 rounded-lg hover:bg-slate-700 transition-colors">
-                  <Plus size={12} /> Нэмэх
-                </button>
-              </div>
-              <p className="text-white/30 text-xs">Sizes/Colors-оос гадна нэмэлт сонголт. Жишээ: Хамгаалалт → Байгаа, Байхгүй</p>
-              {variants.length === 0 ? (
-                <p className="text-white/20 text-xs text-center py-3">Variant байхгүй</p>
-              ) : (
-                <div className="space-y-2">
-                  {variants.map(v => (
-                    <div key={v.id} className="bg-slate-800/60 border border-slate-700 rounded-xl p-3 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <input
-                          value={v.label}
-                          onChange={e => updateVariantLabel(v.id, e.target.value)}
-                          placeholder="Label (жишээ: Хамгаалалт)"
-                          className="flex-1 bg-slate-700 border border-slate-600 text-white text-sm px-2.5 py-2 rounded-lg outline-none focus:border-violet-500"
-                        />
-                        <button onClick={() => removeVariant(v.id)}
-                          className="text-white/30 hover:text-red-400 p-1 transition-colors">
-                          <X size={14} />
-                        </button>
-                      </div>
-                      <input
-                        value={variantInputs[v.id] ?? ""}
-                        onChange={e => {
-                          const val = e.target.value
-                          setVariantInputs(prev => ({
-                            ...prev,
-                            [v.id]: val
-                          }))
-                        }}
-                        onBlur={() => {
-                          const raw = variantInputs[v.id] || ""
-                          const values = raw.split(",").map(s => s.trim()).filter(Boolean)
-                          const newVariants = variants.map(vr =>
-                            vr.id === v.id ? { ...vr, values } : vr
-                          )
-                          setVariants(newVariants)
-                          saveVariants(newVariants)
-                        }}
-                        placeholder="Утгууд таслалаар (жишээ: Байгаа, Байхгүй)"
-                        className="w-full bg-slate-700 border border-slate-600 text-white text-xs px-2.5 py-1.5 rounded-lg outline-none focus:border-violet-500"
-                      />
-                      {v.values.length > 0 && (
-                        <div className="flex gap-1 flex-wrap">
-                          {v.values.map(val => (
-                            <span key={val} className="bg-slate-700 text-white/60 text-xs px-2 py-0.5 rounded-full">{val}</span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                {allSizeOptions.map(s => (
                   <button
-                    onClick={() => saveVariants(variants)}
-                    disabled={varLoading}
-                    className="w-full text-xs py-2 border border-slate-600 hover:border-slate-500 text-white/50 hover:text-white rounded-xl transition-colors flex items-center justify-center gap-1.5">
-                    {varLoading ? <><Loader2 size={12} className="animate-spin" /> Хадгалж байна...</> : "Variants хадгалах"}
+                    key={s}
+                    type="button"
+                    onClick={() => toggleChip(s, sizes, setSizes)}
+                    className={`px-3 py-1 rounded-md text-sm border transition-colors ${
+                      sizes.includes(s)
+                        ? "bg-white text-slate-900 border-white"
+                        : "bg-slate-800 border-slate-700 text-white/60"
+                    }`}
+                  >
+                    {s}
                   </button>
-                </div>
+                ))}
+              </div>
+
+              {/* Inline custom input */}
+              {showCustomSize && (
+                <InlineCustomInput
+                  placeholder="e.g. One Size, 34, 38…"
+                  existing={allSizeOptions}
+                  onCommit={addCustomSize}
+                  onClose={() => setShowCustomSize(false)}
+                />
+              )}
+
+              {!showCustomSize && (
+                <button
+                  type="button"
+                  onClick={() => setShowCustomSize(true)}
+                  className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white border border-dashed border-slate-700 hover:border-slate-500 rounded-lg px-3 py-1.5 w-full justify-center transition-colors"
+                >
+                  <Plus size={12} /> Add Custom Size
+                </button>
               )}
             </div>
 
-            {/* Price */}
+            {/* ── Colors ── */}
+            <div className="space-y-2">
+              <Label>Colors</Label>
+
+              <div className="flex flex-wrap gap-2">
+                {allColorOptions.map(c => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => toggleChip(c, colors, setColors)}
+                    className={`px-3 py-1 rounded-md text-sm border capitalize transition-colors ${
+                      colors.includes(c)
+                        ? "bg-white text-slate-900 border-white"
+                        : "bg-slate-800 border-slate-700 text-white/60"
+                    }`}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+
+              {showCustomColor && (
+                <InlineCustomInput
+                  placeholder="e.g. Navy, Coral, Olive…"
+                  existing={allColorOptions}
+                  onCommit={addCustomColor}
+                  onClose={() => setShowCustomColor(false)}
+                />
+              )}
+
+              {!showCustomColor && (
+                <button
+                  type="button"
+                  onClick={() => setShowCustomColor(true)}
+                  className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white border border-dashed border-slate-700 hover:border-slate-500 rounded-lg px-3 py-1.5 w-full justify-center transition-colors"
+                >
+                  <Plus size={12} /> Add Custom Color
+                </button>
+              )}
+            </div>
+
+            {/* ── Variants ── */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label>Variants</Label>
+                {varLoading && <Loader2 size={12} className="animate-spin text-white/40" />}
+              </div>
+              <p className="text-white/30 text-xs -mt-1">
+                Sizes/Colors-оос гадна нэмэлт сонголт. Жишээ: Хамгаалалт → Байгаа, Байхгүй
+              </p>
+
+              {variants.length === 0 && (
+                <p className="text-white/25 text-xs">Variant байхгүй</p>
+              )}
+
+              {variants.map(variant => (
+                <div
+                  key={variant.id}
+                  className="bg-slate-800/60 border border-slate-700 rounded-xl p-3 space-y-2.5"
+                >
+                  {/* Label input */}
+                  <input
+                    value={variant.label}
+                    onChange={e => updateVariantLabel(variant.id, e.target.value)}
+                    placeholder="Variant label (e.g. Material, Fit…)"
+                    aria-label="Variant label"
+                    className="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:border-slate-400 placeholder:text-white/20 transition-colors"
+                  />
+
+                  {/* Value rows */}
+                  <div className="space-y-1.5">
+                    {variant.values.map((val, vali) => (
+                      <div key={vali} className="flex items-center gap-2">
+                        <input
+                          value={val}
+                          onChange={e => updateVariantValue(variant.id, vali, e.target.value)}
+                          onBlur={() => flushVariantValue(variant.id)}
+                          placeholder={`Value ${vali + 1}`}
+                          aria-label={`${variant.label || "Variant"} value ${vali + 1}`}
+                          className="flex-1 bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:border-slate-400 placeholder:text-white/20 transition-colors"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeVariantValue(variant.id, vali)}
+                          disabled={variant.values.length === 1}
+                          aria-label="Remove value"
+                          className="text-white/30 hover:text-red-400 disabled:opacity-20 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Footer actions */}
+                  <div className="flex items-center justify-between pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => addVariantValue(variant.id)}
+                      className="flex items-center gap-1 text-xs text-white/40 hover:text-white transition-colors"
+                    >
+                      <Plus size={11} /> Add Value
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeVariant(variant.id)}
+                      className="text-xs text-red-400/60 hover:text-red-400 transition-colors"
+                    >
+                      Remove Variant
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {/* Add Variant */}
+              <button
+                type="button"
+                onClick={addVariant}
+                className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white border border-dashed border-slate-700 hover:border-slate-500 rounded-lg px-3 py-2 w-full justify-center transition-colors"
+              >
+                <Plus size={12} /> Add Variant
+              </button>
+            </div>
+
+            {/* ── Price ── */}
             <div className="space-y-2">
               <Label>Price</Label>
               <div className="relative">
@@ -350,20 +559,28 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
               </div>
             </div>
 
-            {/* Status toggle */}
+            {/* ── Status toggle ── */}
             <div className="flex items-center justify-between bg-slate-800 border border-slate-700 rounded-xl px-4 py-3">
               <p className="text-white text-sm font-medium">Status</p>
-              <button onClick={() => setStatus(s => s === "active" ? "inactive" : "active")}
-                className={`relative w-12 h-6 rounded-full transition-colors ${status === "active" ? "bg-green-500" : "bg-slate-600"}`}>
+              <button
+                type="button"
+                onClick={() => setStatus(s => s === "active" ? "inactive" : "active")}
+                className={`relative w-12 h-6 rounded-full transition-colors ${status === "active" ? "bg-green-500" : "bg-slate-600"}`}
+                aria-pressed={status === "active"}
+              >
                 <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${status === "active" ? "left-7" : "left-1"}`} />
               </button>
             </div>
 
-            {/* Discount toggle */}
+            {/* ── Discount toggle ── */}
             <div className="flex items-center justify-between bg-slate-800 border border-slate-700 rounded-xl px-4 py-3">
               <p className="text-white text-sm font-medium">Discount</p>
-              <button onClick={() => setDiscountEnabled(v => !v)}
-                className={`relative w-12 h-6 rounded-full transition-colors ${discountEnabled ? "bg-blue-500" : "bg-slate-600"}`}>
+              <button
+                type="button"
+                onClick={() => setDiscountEnabled(v => !v)}
+                className={`relative w-12 h-6 rounded-full transition-colors ${discountEnabled ? "bg-blue-500" : "bg-slate-600"}`}
+                aria-pressed={discountEnabled}
+              >
                 <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${discountEnabled ? "left-7" : "left-1"}`} />
               </button>
             </div>
@@ -383,24 +600,31 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
                 </div>
               </div>
             )}
-            {/* ── Зургийн variant color ── */}
+
+            {/* ── Image variant color config ── */}
             {images.length > 0 && (
               <div className="space-y-2">
-                <Label className="text-white flex items-center gap-1.5"><ImageIcon size={14} /> Зургийн өнгө тохиргоо</Label>
-                <p className="text-white/30 text-xs">Зургийн хажууд өнгө сонгоход тэр өнгөний бараа сонгогдоход харагдана</p>
+                <Label className="text-white flex items-center gap-1.5">
+                  <ImageIcon size={14} /> Зургийн өнгө тохиргоо
+                </Label>
+                <p className="text-white/30 text-xs">
+                  Зургийн хажууд өнгө сонгоход тэр өнгөний бараа сонгогдоход харагдана
+                </p>
                 <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                   {[...images].sort((a, b) => a.order - b.order).map(img => (
                     <div key={img.id} className="flex items-center gap-2 bg-slate-800/60 border border-slate-700 rounded-xl p-2">
-                      <img src={img.url} className="w-12 h-12 object-cover rounded-lg flex-shrink-0" />
+                      <img src={img.url} className="w-12 h-12 object-cover rounded-lg flex-shrink-0" alt="" />
                       <div className="flex-1 min-w-0 space-y-1.5">
                         <div className="flex items-center gap-1.5">
                           <button
+                            type="button"
                             onClick={() => handleSetPrimary(img.id)}
                             className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition-colors ${
                               img.isPrimary
                                 ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
                                 : "text-white/30 hover:text-white/60 border border-transparent hover:border-slate-600"
-                            }`}>
+                            }`}
+                          >
                             {imgLoading === img.id
                               ? <Loader2 size={11} className="animate-spin" />
                               : <Star size={11} className={img.isPrimary ? "fill-amber-400" : ""} />
@@ -414,7 +638,8 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
                           className="w-full bg-slate-700 border border-slate-600 text-white text-xs px-2 py-1 rounded-lg outline-none"
                         >
                           <option value="">— Өнгө холбоогүй —</option>
-                          {product.colors.map(c => (
+                          {/* Show all colors including custom ones */}
+                          {colors.map(c => (
                             <option key={c} value={c}>{c}</option>
                           ))}
                         </select>
@@ -425,27 +650,37 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
               </div>
             )}
 
-            {/* Save */}
+            {/* ── Save ── */}
             <Button onClick={handleSubmit} disabled={loading} className="w-full py-5 bg-slate-950 hover:bg-slate-800">
               {loading ? <><Loader2 className="animate-spin mr-2" size={16} />Saving...</> : "Save Changes"}
             </Button>
 
-            {/* Delete */}
+            {/* ── Delete ── */}
             {!confirmDelete ? (
-              <button onClick={() => setConfirmDelete(true)}
-                className="w-full flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 py-2.5 rounded-xl text-sm transition-colors">
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(true)}
+                className="w-full flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 py-2.5 rounded-xl text-sm transition-colors"
+              >
                 <Trash2 size={15} /> Delete Product
               </button>
             ) : (
               <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 space-y-3">
                 <p className="text-red-300 text-sm text-center">Устгахдаа итгэлтэй байна уу?</p>
                 <div className="flex gap-2">
-                  <button onClick={() => setConfirmDelete(false)}
-                    className="flex-1 bg-slate-800 text-white/60 py-2 rounded-lg text-sm hover:bg-slate-700 transition-colors">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDelete(false)}
+                    className="flex-1 bg-slate-800 text-white/60 py-2 rounded-lg text-sm hover:bg-slate-700 transition-colors"
+                  >
                     Болих
                   </button>
-                  <button onClick={handleDelete} disabled={deleting}
-                    className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors">
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors"
+                  >
                     {deleting ? <Loader2 size={14} className="animate-spin" /> : "Устгах"}
                   </button>
                 </div>
