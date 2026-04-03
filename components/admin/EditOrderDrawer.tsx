@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/useToast"
 import { Loader2, Package, Trash2 } from "lucide-react"
 
 // ─── Types ──────────────────────────────────────────────────────────────────
-export type OrderStatus = "pending" | "confirmed" | "delivered"
+export type OrderStatus = "pending" | "paid" | "processing" | "delivered"
 
 interface ProductImage { id: string; url: string; isPrimary: boolean }
 
@@ -65,9 +65,30 @@ interface Props {
 }
 
 const STATUS_CONFIG: Record<OrderStatus, { label: string; color: string; bg: string; border: string }> = {
-  pending:   { label: "Хүлээгдэж буй", color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/30" },
-  confirmed: { label: "Баталгаажсан",  color: "text-blue-400",  bg: "bg-blue-500/10",  border: "border-blue-500/30"  },
-  delivered: { label: "Хүргэгдсэн",    color: "text-green-400", bg: "bg-green-500/10", border: "border-green-500/30" },
+  pending: {
+    label: "Хүлээгдэж байна",
+    color: "text-rose-400",
+    bg: "bg-rose-500/10",
+    border: "border-rose-500/30",
+  },
+  paid: {
+    label: "Төлөгдсөн",
+    color: "text-blue-400",
+    bg: "bg-blue-500/10",
+    border: "border-blue-500/30",
+  },
+  processing: {
+    label: "Бэлтгэж байна",
+    color: "text-amber-400",
+    bg: "bg-amber-500/10",
+    border: "border-amber-500/30",
+  },
+  delivered: {
+    label: "Хүргэгдсэн",
+    color: "text-green-400",
+    bg: "bg-green-500/10",
+    border: "border-green-500/30",
+  },
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -219,7 +240,7 @@ export default function EditOrderDrawer({ order, onClose, onSuccess, onDeleted }
                     className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border font-medium transition-all ${
                       status === key ? `${s.bg} ${s.color} ${s.border}` : "bg-slate-800 text-white/40 border-slate-700 hover:border-slate-500"
                     }`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${key === "pending" ? "bg-amber-400" : key === "confirmed" ? "bg-blue-400" : "bg-green-400"}`} />
+                    <span className={`w-1.5 h-1.5 rounded-full ${key === "pending" ? "bg-amber-400" : key === "paid" ? "bg-blue-400" : key === "processing" ? "bg-indigo-400" : "bg-green-400"}`} />
                     {s.label}
                   </button>
                 ))}

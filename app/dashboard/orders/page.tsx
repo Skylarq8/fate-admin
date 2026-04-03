@@ -10,9 +10,30 @@ import EditOrderDrawer, { Order, OrderStatus } from "@/components/admin/EditOrde
 
 // ─── Status config ──────────────────────────────────────────────────────────
 const STATUS_CONFIG: Record<OrderStatus, { label: string; color: string; bg: string; border: string }> = {
-  pending:   { label: "Хүлээгдэж буй", color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/30" },
-  confirmed: { label: "Баталгаажсан",  color: "text-blue-400",  bg: "bg-blue-500/10",  border: "border-blue-500/30"  },
-  delivered: { label: "Хүргэгдсэн",    color: "text-green-400", bg: "bg-green-500/10", border: "border-green-500/30" },
+  pending: {
+    label: "Хүлээгдэж байна",
+    color: "text-rose-400",
+    bg: "bg-rose-500/10",
+    border: "border-rose-500/30",
+  },
+  paid: {
+    label: "Төлөгдсөн",
+    color: "text-blue-400",
+    bg: "bg-blue-500/10",
+    border: "border-blue-500/30",
+  },
+  processing: {
+    label: "Бэлтгэж байна",
+    color: "text-amber-400",
+    bg: "bg-amber-500/10",
+    border: "border-amber-500/30",
+  },
+  delivered: {
+    label: "Хүргэгдсэн",
+    color: "text-green-400",
+    bg: "bg-green-500/10",
+    border: "border-green-500/30",
+  },
 }
 
 // ─── StatusDropdown ──────────────────────────────────────────────────────────
@@ -56,7 +77,7 @@ function StatusDropdown({ order, onUpdated, onToast }: { order: Order; onUpdated
           {(Object.entries(STATUS_CONFIG) as [OrderStatus, typeof STATUS_CONFIG[OrderStatus]][]).map(([key, s]) => (
             <button key={key} onClick={() => update(key)}
               className={`w-full text-left px-3 py-2.5 text-xs flex items-center gap-2 hover:bg-slate-700 transition-colors ${key === order.status ? s.color + " font-semibold" : "text-white/70"}`}>
-              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${key === "pending" ? "bg-amber-400" : key === "confirmed" ? "bg-blue-400" : "bg-green-400"}`} />
+              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${key === "pending" ? "bg-rose-400" : key === "paid" ? "bg-blue-400" : key === "processing" ? "bg-amber-400" : "bg-green-400"}`} />
               {s.label}
             </button>
           ))}
@@ -245,28 +266,36 @@ export default function OrdersPage() {
               border:"border-slate-700",
             },
             {
-              label: "Хүлээгдэж буй",
+              label: "Хүлээгдэж байна",
               value: orders.filter(o => o.status === "pending").length,
               sub:   orders.filter(o => o.status === "pending").reduce((s,o) => s + o.totalAmount, 0),
-              color: "text-amber-400",
-              bg:    "bg-amber-500/5",
-              border:"border-amber-500/20",
+              color: "text-rose-400",
+              bg:    "bg-rose-500/10",
+              border:"border-rose-500/30",
             },
             {
-              label: "Баталгаажсан",
-              value: orders.filter(o => o.status === "confirmed").length,
-              sub:   orders.filter(o => o.status === "confirmed").reduce((s,o) => s + o.totalAmount, 0),
+              label: "Төлөгдсөн",
+              value: orders.filter(o => o.status === "paid").length,
+              sub:   orders.filter(o => o.status === "paid").reduce((s,o) => s + o.totalAmount, 0),
               color: "text-blue-400",
-              bg:    "bg-blue-500/5",
-              border:"border-blue-500/20",
+              bg:    "bg-blue-500/10",
+              border:"border-blue-500/30",
+            },
+            {
+              label: "Бэлтгэж байна",
+              value: orders.filter(o => o.status === "processing").length,
+              sub:   orders.filter(o => o.status === "processing").reduce((s,o) => s + o.totalAmount, 0),
+              color: "text-amber-400",
+              bg:    "bg-amber-500/10",
+              border:"border-amber-500/30",
             },
             {
               label: "Хүргэгдсэн",
               value: orders.filter(o => o.status === "delivered").length,
               sub:   orders.filter(o => o.status === "delivered").reduce((s,o) => s + o.totalAmount, 0),
               color: "text-green-400",
-              bg:    "bg-green-500/5",
-              border:"border-green-500/20",
+              bg:    "bg-green-500/10",
+              border:"border-green-500/30",
             },
           ].map(card => (
             <div key={card.label} className={`rounded-xl border p-4 ${card.bg} ${card.border}`}>

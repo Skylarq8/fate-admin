@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
   const status = searchParams.get("status"); // pending | confirmed | delivered
 
   const orders = await prisma.order.findMany({
-    where: status ? { status: status as "pending" | "confirmed" | "delivered" } : {},
+    where: status ? { status: status as "pending" | "paid" | "processing" | "delivered" } : {},
     include: {
       items: {
         include: { product: { include: { images: { orderBy: [{ isPrimary: "desc" }] } } } },

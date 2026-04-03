@@ -15,7 +15,8 @@ enum ProductStatus {
 
 enum OrderStatus {
   pending
-  confirmed
+  paid
+  processing
   delivered
 }
 

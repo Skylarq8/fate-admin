@@ -35,7 +35,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
       items?: { productId: string; quantity: number; size?: string; color?: string; variants?: Record<string,string> }[]
     }
 
-    const allowed = ["pending", "confirmed", "delivered"]
+    const allowed = ["pending", "paid", "processing", "delivered"]
     if (body.status && !allowed.includes(body.status))
       return fail(`status нь дараах утгуудын нэг байх ёстой: ${allowed.join(", ")}`)
 
@@ -63,7 +63,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
           ...(body.phone           && { phone:           body.phone }),
           ...(body.email           && { email:           body.email }),
           ...(body.shippingAddress && { shippingAddress: body.shippingAddress }),
-          ...(body.status          && { status:          body.status as "pending" | "confirmed" | "delivered" }),
+          ...(body.status          && { status:          body.status as "pending" | "paid" | "processing" | "delivered" }),
           totalAmount: Math.round(totalAmount),
           items: {
             create: body.items.map(item => {
@@ -93,7 +93,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
         ...(body.phone           && { phone:           body.phone }),
         ...(body.email           && { email:           body.email }),
         ...(body.shippingAddress && { shippingAddress: body.shippingAddress }),
-        ...(body.status          && { status:          body.status as "pending" | "confirmed" | "delivered" }),
+        ...(body.status          && { status:          body.status as "pending" | "paid" | "processing" | "delivered" }),
       },
       include,
     })
