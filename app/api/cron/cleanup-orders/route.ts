@@ -3,12 +3,12 @@ import { prisma } from "@/lib/prisma"
 
 export async function GET() {
   try {
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000)
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
 
     const deleted = await prisma.order.deleteMany({
       where: {
         status: "pending",
-        createdAt: { lt: fiveMinutesAgo },
+        createdAt: { lt: oneDayAgo },
       },
     })
 
