@@ -116,7 +116,7 @@ export default function CategoriesPage() {
       <div>
         <div
           onClick={() => !isEditing && fetchProducts(cat)}
-          className={`group flex items-center gap-2.5 py-2.5 pr-200 rounded-xl cursor-pointer transition-all border
+          className={`group flex items-center gap-2.5 py-2.5 rounded-xl cursor-pointer transition-all border
             ${isSelected
               ? "bg-violet-500/10 border-violet-500/20 text-white"
               : "border-transparent hover:bg-slate-800/50 text-white/70 hover:text-white"
@@ -139,10 +139,12 @@ export default function CategoriesPage() {
           {isEditing ? (
             <EditInput value={cat.name} onSave={v => handleRename(cat.id, v)} onCancel={() => setEditingId(null)} />
           ) : (
-            <>
-              <span className="flex-1 text-sm">{cat.name}</span>
-              <span className="text-white/70 text-[14px] flex-shrink-0">{countProductsRecursive(cat)}</span>
-            </>
+            <div className="flex-1 flex flex-col gap-0.5 min-w-0">
+              <span className="text-sm truncate">{cat.name}</span>
+              <span className="text-[11px] text-white/40 leading-none pl-0.5">
+                {countProductsRecursive(cat)} бараа
+              </span>
+            </div>
           )}
 
           {/* actions on hover */}
@@ -304,7 +306,7 @@ export default function CategoriesPage() {
       <div className="flex gap-5">
 
         {/* ── Tree sidebar ── */}
-        <div className={`${showProducts ? "hidden md:block" : "block"} w-full md:w-46 lg:w-46 flex-shrink-0`}>
+        <div className={`${showProducts ? "hidden md:block" : "block"} w-full md:w-80 flex-shrink-0`}>
           <div className="bg-slate-900 border border-slate-700 rounded-2xl overflow-hidden">
             {loading ? (
               <div className="p-3 space-y-1.5">
