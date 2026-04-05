@@ -60,7 +60,7 @@ export default function Sidebar() {
         open ? "w-64" : "w-16",
       )}>
         <div className="h-16 flex items-center justify-between px-4 border-b border-slate-800 flex-shrink-0">
-          {open && <span className="text-xl font-bold truncate">Admin</span>}
+          {open && <span className="text-xl font-bold truncate">FATE</span>}
           <button onClick={() => setOpen(!open)}
             className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-slate-800 transition-colors ml-auto">
             <PanelRight className={cn("w-5 h-5 transition-transform", open ? "rotate-180" : "")} />
