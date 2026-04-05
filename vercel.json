@@ -1,5 +1,4 @@
 {
-  "functions": {},
   "crons": [
     {
       "path": "/api/cron/cleanup-orders",
