@@ -74,13 +74,24 @@ export async function POST(req: NextRequest) {
       return fail("Энэ parent дотор ийм category байна.")
     }
 
+    let finalSortOrder = sortOrder ?? 0
+
+    if (parentId) {
+      const last = await prisma.category.findFirst({
+        where: { parentId },
+        orderBy: { sortOrder: "desc" },
+      })
+
+      finalSortOrder = last ? last.sortOrder + 1 : 0
+    }
+
     const category = await prisma.category.create({
       data: {
         name: name.trim(),
         slug,
         parentId: parentId ?? null,
         imageUrl: imageUrl ?? null,
-        sortOrder: sortOrder ?? 0,
+        sortOrder: finalSortOrder,
       },
     })
 
