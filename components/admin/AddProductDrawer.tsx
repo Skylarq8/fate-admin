@@ -85,7 +85,7 @@ function CustomValueGroup({
               onChange={e => updateField(i, e.target.value)}
               placeholder={placeholder}
               aria-label={`${label} value ${i + 1}`}
-              className="flex-1 bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:border-slate-400 transition-colors placeholder:text-white/20"
+              className="flex-1 bg-slate-800 border border-slate-700 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:border-slate-400 transition-colors placeholder:text-white/20"
             />
             <button
               type="button"
@@ -107,7 +107,7 @@ function CustomValueGroup({
         className="flex items-center gap-1 text-xs text-white/40 hover:text-white transition-colors"
       >
         <Plus size={12} />
-        Add another
+        Нэмэлт утга нэмэх
       </button>
     </div>
   )
@@ -285,7 +285,7 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
   return (
     <>
       <Button onClick={() => setOpen(true)} className="rounded-sm bg-white/90 text-slate-900">
-        Add Product
+        Бараа нэмэх
       </Button>
 
       <Sheet open={open} onOpenChange={v => { setOpen(v); if (!v) resetForm() }}>
@@ -295,16 +295,16 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
           onOpenAutoFocus={e => e.preventDefault()}
         >
           <SheetHeader className="px-5 pb-4">
-            <SheetTitle className="text-white text-lg">Add Product</SheetTitle>
+            <SheetTitle className="text-white text-lg">Бараа нэмэх</SheetTitle>
           </SheetHeader>
 
           <div className="space-y-4 px-5 pb-8">
 
             {/* ── Images ── */}
             <div className="space-y-2">
-              <Label>Images</Label>
+              <Label>Барааны зурагууд</Label>
               <label className="flex items-center justify-center w-full h-24 border-2 border-dashed border-slate-700 rounded-lg cursor-pointer hover:bg-slate-800">
-                <span className="text-sm text-white/40">Click to upload images</span>
+                <span className="text-sm text-white/40">Зураг оруулах</span>
                 <input type="file" multiple accept="image/*" onChange={handleImageUpload} className="hidden" />
               </label>
               {images.length > 0 && (
@@ -348,19 +348,19 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
 
             {/* ── Name ── */}
             <div className="space-y-2">
-              <Label>Name</Label>
-              <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Product name" />
+              <Label>Нэр</Label>
+              <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Барааны нэр" />
             </div>
 
             {/* ── Description ── */}
             <div className="space-y-2">
-              <Label>Description</Label>
-              <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Description" />
+              <Label>Тайлбар</Label>
+              <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Тайлбар" />
             </div>
 
             {/* ── Categories ── */}
             <div className="space-y-1">
-              <Label>Category</Label>
+              <Label>Категори</Label>
               <div className="flex flex-wrap gap-2">
                 {selectedCategories.map(id => {
                   const cat = categories.find(c => c.id === id)
@@ -377,7 +377,7 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
                 onClick={() => setCategoryOpen(!categoryOpen)}
                 className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 flex items-center justify-between text-white/40 text-sm"
               >
-                Add category <ChevronDown size={14} />
+                Категори нэмэх <ChevronDown size={14} />
               </button>
               {categoryOpen && (
                 <div className="border border-slate-700 rounded-lg bg-slate-800 max-h-40 overflow-y-auto p-2 space-y-1">
@@ -393,7 +393,7 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
 
             {/* ── Sizes ── */}
             <div className="space-y-2">
-              <Label>Sizes</Label>
+              <Label>Хэмжээ</Label>
 
               {/* Predefined chips */}
               <div className="flex flex-wrap gap-2">
@@ -416,11 +416,11 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
               {/* Custom size group */}
               {showCustomSize && (
                 <CustomValueGroup
-                  label="Custom Size"
+                  label="Нэмэлт хэмжээ"
                   values={customSizes.length > 0 ? customSizes : [""]}
                   onChange={setCustomSizes}
                   onClose={() => { setShowCustomSize(false); setCustomSizes([]) }}
-                  placeholder="e.g. One Size, 34, 38…"
+                  placeholder="хэмжээ оруулна уу"
                 />
               )}
 
@@ -442,14 +442,14 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
                   className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white border border-dashed border-slate-700 hover:border-slate-500 rounded-lg px-3 py-1.5 w-full justify-center transition-colors"
                 >
                   <Plus size={12} />
-                  Add Custom Size
+                  Нэмэлтээр хэмжээ нэмэх
                 </button>
               )}
             </div>
 
             {/* ── Colors ── */}
             <div className="space-y-2">
-              <Label>Colors</Label>
+              <Label>Өнгө</Label>
 
               {/* Predefined chips */}
               <div className="flex flex-wrap gap-2">
@@ -472,11 +472,11 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
               {/* Custom color group */}
               {showCustomColor && (
                 <CustomValueGroup
-                  label="Custom Color"
+                  label="Нэмэлт өнгө"
                   values={customColors.length > 0 ? customColors : [""]}
                   onChange={setCustomColors}
                   onClose={() => { setShowCustomColor(false); setCustomColors([]) }}
-                  placeholder="e.g. Navy, Coral, Olive…"
+                  placeholder="өнгө оруулна уу"
                 />
               )}
 
@@ -498,7 +498,7 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
                   className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white border border-dashed border-slate-700 hover:border-slate-500 rounded-lg px-3 py-1.5 w-full justify-center transition-colors"
                 >
                   <Plus size={12} />
-                  Add Custom Color
+                  Нэмэлтээр өнгө нэмэх
                 </button>
               )}
             </div>
@@ -510,7 +510,7 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
               </div>
 
               {variants.length === 0 && (
-                <p className="text-white/25 text-xs">Variant байхгүй</p>
+                <p className="text-white/25 text-xs">Variants байхгүй</p>
               )}
 
               {variants.map((variant, vi) => (
@@ -522,9 +522,9 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
                   <input
                     value={variant.label}
                     onChange={e => updateVariantLabel(vi, e.target.value)}
-                    placeholder="Variant label (e.g. Material, Fit…)"
-                    aria-label="Variant label"
-                    className="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:border-slate-400 placeholder:text-white/20 transition-colors"
+                    placeholder="Variants нэр (жишээ: Материал, Fit…)"
+                    aria-label="Variants нэр"
+                    className="w-full bg-slate-800 border border-slate-700 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:border-slate-400 placeholder:text-white/20 transition-colors"
                   />
 
                   {/* Value rows */}
@@ -534,9 +534,9 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
                         <input
                           value={val}
                           onChange={e => updateVariantValue(vi, vali, e.target.value)}
-                          placeholder={`Value ${vali + 1}`}
+                          placeholder={`Утга ${vali + 1}`}
                           aria-label={`${variant.label || "Variant"} value ${vali + 1}`}
-                          className="flex-1 bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:border-slate-400 placeholder:text-white/20 transition-colors"
+                          className="flex-1 bg-slate-800 border border-slate-700 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:border-slate-400 placeholder:text-white/20 transition-colors"
                         />
                         <button
                           type="button"
@@ -559,14 +559,14 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
                       className="flex items-center gap-1 text-xs text-white/40 hover:text-white transition-colors"
                     >
                       <Plus size={11} />
-                      Add Value
+                      Утга нэмэх
                     </button>
                     <button
                       type="button"
                       onClick={() => removeVariant(vi)}
-                      className="text-xs text-red-400/60 hover:text-red-400 transition-colors"
+                      className="text-xs text-red-500/70 hover:text-red-500 transition-colors"
                     >
-                      Remove Variant
+                      Variants устгах
                     </button>
                   </div>
                 </div>
@@ -579,13 +579,13 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
                 className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white border border-dashed border-slate-700 hover:border-slate-500 rounded-lg px-3 py-2 w-full justify-center transition-colors"
               >
                 <Plus size={12} />
-                Add Variant
+                Variants нэмэх
               </button>
             </div>
 
             {/* ── Price ── */}
             <div className="space-y-2">
-              <Label>Price</Label>
+              <Label>Үнэ</Label>
               <div className="relative">
                 <Input
                   type="text"
@@ -606,7 +606,7 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
               <button
                 type="button"
                 onClick={() => setDiscountEnabled(p => !p)}
-                className={`relative w-12 h-6 rounded-full transition-colors ${discountEnabled ? "bg-blue-500" : "bg-slate-600"}`}
+                className={`relative w-12 h-6 rounded-full transition-colors ${discountEnabled ? "bg-green-500" : "bg-slate-600"}`}
                 aria-pressed={discountEnabled}
               >
                 <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${discountEnabled ? "left-7" : "left-1"}`} />
@@ -616,7 +616,7 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
             {discountEnabled && (
               <div className="space-y-4 border border-slate-700 p-4 rounded-lg">
                 <div className="space-y-2">
-                  <Label>Final Price</Label>
+                  <Label>Эцсийн үнэ</Label>
                   <div className="relative">
                     <Input
                       type="text"
@@ -628,7 +628,7 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label>Discount Ends At</Label>
+                  <Label>Хямдрал дуусах огноо</Label>
                   <Input
                     type="datetime-local"
                     value={discountEndsAt}
@@ -644,8 +644,8 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
               className="w-full mt-2 py-5 bg-slate-950 hover:bg-slate-800"
             >
               {loading
-                ? <><Loader2 className="animate-spin mr-2" size={16} />Uploading...</>
-                : "Submit"
+                ? <><Loader2 className="animate-spin mr-2" size={16} />Нэмж байна...</>
+                : "Бараа нэмэх"
               }
             </Button>
           </div>

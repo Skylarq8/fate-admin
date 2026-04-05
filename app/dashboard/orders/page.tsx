@@ -255,7 +255,7 @@ export default function OrdersPage() {
 
       {/* ── Stats cards ── */}
       {!loading && (
-        <div className="grid grid-cols-2 gap-3 mb-4 md:mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4 md:mb-6">
           {[
             {
               label: "Нийт захиалга",
@@ -296,9 +296,10 @@ export default function OrdersPage() {
               color: "text-green-400",
               bg:    "bg-green-500/10",
               border:"border-green-500/30",
+              className: "col-span-2 md:col-span-1"
             },
           ].map(card => (
-            <div key={card.label} className={`rounded-xl border p-4 ${card.bg} ${card.border}`}>
+            <div key={card.label} className={`rounded-xl border p-4 ${card.bg} ${card.border} ${card.className || ""}`}>
               <p className="text-white/40 text-xs mb-2">{card.label}</p>
               <p className={`text-2xl font-bold ${card.color}`}>{card.value}</p>
               {card.sub !== null && (

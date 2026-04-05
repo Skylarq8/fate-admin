@@ -12,7 +12,7 @@ import { TrendingUp, TrendingDown } from "lucide-react"
 interface Order {
   id: string
   totalAmount: number
-  status: "pending" | "confirmed" | "delivered"
+  status: "pending" | "paid" | "processing" | "delivered"
   createdAt: string
 }
 
@@ -38,8 +38,18 @@ interface OrderWithItems extends Order {
 }
 
 // ─── Config ───────────────────────────────────────────────────────────────────
-const STATUS_COLORS = { pending: "#f59e0b", confirmed: "#3b82f6", delivered: "#22c55e" }
-const STATUS_LABELS = { pending: "Хүлээгдэж буй", confirmed: "Баталгаажсан", delivered: "Хүргэгдсэн" }
+const STATUS_COLORS = {
+  pending:    "#f43f5e",
+  paid:       "#3b82f6",
+  processing: "#f59e0b",
+  delivered:  "#22c55e", 
+}
+const STATUS_LABELS = { 
+  pending:    "Хүлээгдэж буй",
+  paid:       "Төлөгдсөн",
+  processing: "Бэлтгэж байна",
+  delivered:  "Хүргэгдсэн",
+}
 
 // ─── Custom Tooltip ───────────────────────────────────────────────────────────
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -80,7 +90,7 @@ export default function AnalyticsPage() {
   const today = new Date()
 
   // ── 1. Order status donut ──────────────────────────────────────────────────
-  const statusData = (["pending", "confirmed", "delivered"] as const)
+  const statusData = (["pending", "paid", "processing", "delivered"] as const)
     .map(s => ({ name: STATUS_LABELS[s], value: orders.filter(o => o.status === s).length, color: STATUS_COLORS[s] }))
     .filter(d => d.value > 0)
 
@@ -102,9 +112,11 @@ export default function AnalyticsPage() {
     const d = new Date(today); d.setDate(today.getDate() - i)
     dailyRevenueMap[d.toLocaleDateString("mn-MN")] = 0
   }
-  orders.filter(o => o.status === "delivered").forEach(o => {
+  orders.filter(o => ["paid", "processing", "delivered"].includes(o.status)).forEach(o => {
     const d = new Date(o.createdAt).toLocaleDateString("mn-MN")
-    if (dailyRevenueMap[d] !== undefined) dailyRevenueMap[d] += o.totalAmount
+    if (dailyRevenueMap[d] !== undefined) {
+      dailyRevenueMap[d] += o.totalAmount
+    }
   })
   const revenueData = Object.entries(dailyRevenueMap).map(([date, revenue]) => ({ date: date.slice(5), Орлого: revenue }))
 

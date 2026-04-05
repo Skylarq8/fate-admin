@@ -99,13 +99,13 @@ export default function AddCouponDrawer({ onSuccess }: Props) {
   return (
     <>
       <Button onClick={() => setOpen(true)} className="rounded-sm bg-white/90 text-slate-900">
-        Add Coupon
+        Купон нэмэх
       </Button>
 
       <Sheet open={open} onOpenChange={v => { setOpen(v); if (!v) reset() }}>
         <SheetContent side="right" className="w-full sm:w-[440px] overflow-y-auto bg-slate-900 text-white border-slate-700">
           <SheetHeader className="px-5 pb-4">
-            <SheetTitle className="text-white text-lg">Add Coupon</SheetTitle>
+            <SheetTitle className="text-white text-lg">Купон нэмэх</SheetTitle>
           </SheetHeader>
 
           <div className="space-y-5 px-5 pb-8">
@@ -247,8 +247,8 @@ export default function AddCouponDrawer({ onSuccess }: Props) {
             {/* Submit */}
             <Button onClick={handleSubmit} disabled={loading} className="w-full py-5 bg-slate-950 hover:bg-slate-800">
               {loading
-                ? <><Loader2 className="animate-spin mr-2" size={16} /> Creating...</>
-                : "Create Coupon"
+                ? <><Loader2 className="animate-spin mr-2" size={16} /> Купон үүсгэж байна...</>
+                : "Купон үүсгэх"
               }
             </Button>
 

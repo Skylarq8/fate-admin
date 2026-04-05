@@ -9,7 +9,7 @@ interface Order {
   id: string
   customerName: string
   totalAmount: number
-  status: "pending" | "confirmed" | "delivered"
+  status: "pending" | "paid" | "processing" | "delivered"
   createdAt: string
 }
 
@@ -19,15 +19,44 @@ interface Stats {
   totalProducts:   number
   totalCategories: number
   pendingOrders:   number
-  confirmedOrders: number
+  paidOrders:      number
+  processingOrders: number
   deliveredOrders: number
   recentOrders:    Order[]
 }
 
 const STATUS_CONFIG = {
-  pending:   { statusLabel: "Хүлээгдэж буй", color: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/30", icon: <Clock       size={12} /> },
-  confirmed: { statusLabel: "Баталгаажсан",  color: "text-blue-400",  bg: "bg-blue-500/10",  border: "border-blue-500/30", icon: <CheckCircle size={12} /> },
-  delivered: { statusLabel: "Хүргэгдсэн",    color: "text-green-400", bg: "bg-green-500/10", border: "border-green-500/30",icon: <Truck       size={12} /> },
+  pending: {
+    statusLabel: "Хүлээгдэж буй",
+    color: "text-rose-400",
+    bg: "bg-rose-500/10",
+    border: "border-rose-500/30",
+    icon: <Clock size={12} />
+  },
+
+  paid: {
+    statusLabel: "Төлөгдсөн",
+    color: "text-blue-400",
+    bg: "bg-blue-500/10",
+    border: "border-blue-500/30",
+    icon: <CheckCircle size={12} />
+  },
+
+  processing: {
+    statusLabel: "Бэлтгэж буй",
+    color: "text-amber-400",
+    bg: "bg-amber-500/10",
+    border: "border-amber-500/30",
+    icon: <Package size={12} />
+  },
+
+  delivered: {
+    statusLabel: "Хүргэгдсэн",
+    color: "text-green-400",
+    bg: "bg-green-500/10",
+    border: "border-green-500/30",
+    icon: <Truck size={12} />
+  },
 }
 
 export default function OverviewPage() {
@@ -48,12 +77,15 @@ export default function OverviewPage() {
 
         const orders: Order[] = ordersData.data ?? []
         setStats({
-          totalRevenue:    orders.filter(o => o.status === "delivered").reduce((s, o) => s + o.totalAmount, 0),
+          totalRevenue: orders
+            .filter(o => ["paid", "processing", "delivered"].includes(o.status))
+            .reduce((s, o) => s + o.totalAmount, 0),
           totalOrders:     orders.length,
           totalProducts:   (productsData.data   ?? []).length,
           totalCategories: (categoriesData.data ?? []).length,
           pendingOrders:   orders.filter(o => o.status === "pending").length,
-          confirmedOrders: orders.filter(o => o.status === "confirmed").length,
+          paidOrders:      orders.filter(o => o.status === "paid").length,
+          processingOrders:orders.filter(o => o.status === "processing").length,
           deliveredOrders: orders.filter(o => o.status === "delivered").length,
           recentOrders:    orders.slice(0, 6),
         })
@@ -70,9 +102,8 @@ export default function OverviewPage() {
   if (!stats)  return null
 
   return (
-    <div className="py-4 px-1 md:p-6 space-y-6">
+    <div className="py-4 px-1 md:p-6 space-y-3">
       <h1 className="text-xl md:text-2xl font-bold text-white">Ерөнхий мэдээлэл</h1>
-
       {/* ── Top stat cards ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
@@ -90,10 +121,11 @@ export default function OverviewPage() {
       </div>
 
       {/* ── Order status cards ── */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { value: stats.pendingOrders,   ...STATUS_CONFIG.pending   },
-          { value: stats.confirmedOrders, ...STATUS_CONFIG.confirmed },
+          { value: stats.paidOrders,       ...STATUS_CONFIG.paid },        
+          { value: stats.processingOrders, ...STATUS_CONFIG.processing },
           { value: stats.deliveredOrders, ...STATUS_CONFIG.delivered },
         ].map(card => (
           <div key={card.statusLabel} className={`rounded-xl border p-4 ${card.bg} ${card.border}`}>

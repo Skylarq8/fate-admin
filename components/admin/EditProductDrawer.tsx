@@ -16,7 +16,11 @@ import { Product, VariantOption } from "@/components/admin/ProductDetailModal"
 // ─────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────
-interface Category { id: string; name: string }
+interface Category {
+  id: string
+  name: string
+  parentId: string | null
+}
 
 // Local variant type — flat, without DB fields like `id` / `order`
 type Variant = {
@@ -155,6 +159,16 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
   }, [product.id])
 
   useEffect(() => { setImages(product.images ?? []) }, [product.id])
+
+  const getCategoryLabel = (cat: Category): string => {
+    const names: string[] = []
+    let current: Category | undefined = cat
+    while (current) {
+      names.unshift(current.name)
+      current = categories.find(c => c.id === current!.parentId)
+    }
+    return names.join(" / ")
+  }
 
   // ─────────────────────────────────────────────
   // Variant persistence
@@ -330,26 +344,26 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
           onOpenAutoFocus={e => e.preventDefault()}
         >
           <SheetHeader className="px-5 pb-4">
-            <SheetTitle className="text-white text-lg">Edit Product</SheetTitle>
+            <SheetTitle className="text-white text-lg">Бараа засах</SheetTitle>
           </SheetHeader>
 
           <div className="space-y-4 px-5 pb-8">
 
             {/* ── Name ── */}
             <div className="space-y-2">
-              <Label>Name</Label>
+              <Label>Нэр</Label>
               <Input value={title} onChange={e => setTitle(e.target.value)} />
             </div>
 
             {/* ── Description ── */}
             <div className="space-y-2">
-              <Label>Description</Label>
+              <Label>Тайлбар</Label>
               <Textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} />
             </div>
 
             {/* ── Categories ── */}
             <div className="space-y-1">
-              <Label>Category</Label>
+              <Label>Категори</Label>
               <div className="flex flex-wrap gap-2">
                 {selectedCats.map(id => {
                   const cat = categories.find(c => c.id === id)
@@ -366,7 +380,7 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
                 onClick={() => setCategoryOpen(!categoryOpen)}
                 className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 flex items-center justify-between text-white/40 text-sm"
               >
-                Add category <ChevronDown size={14} />
+                Категори нэмэх <ChevronDown size={14} />
               </button>
               {categoryOpen && (
                 <div className="border border-slate-700 rounded-lg bg-slate-800 max-h-40 overflow-y-auto p-2 space-y-1">
@@ -376,7 +390,7 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
                         checked={selectedCats.includes(cat.id)}
                         onCheckedChange={() => toggleChip(cat.id, selectedCats, setSelectedCats)}
                       />
-                      <span className="text-sm">{cat.name}</span>
+                      <span className="text-sm">{getCategoryLabel(cat)}</span>
                     </label>
                   ))}
                 </div>
@@ -385,7 +399,7 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
 
             {/* ── Sizes ── */}
             <div className="space-y-2">
-              <Label>Sizes</Label>
+              <Label>Хэмжээ</Label>
 
               {/* All chips: predefined + custom */}
               <div className="flex flex-wrap gap-2">
@@ -421,14 +435,14 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
                   onClick={() => setShowCustomSize(true)}
                   className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white border border-dashed border-slate-700 hover:border-slate-500 rounded-lg px-3 py-1.5 w-full justify-center transition-colors"
                 >
-                  <Plus size={12} /> Add Custom Size
+                  <Plus size={12} /> Нэмэлтээр хэмжээ нэмэх
                 </button>
               )}
             </div>
 
             {/* ── Colors ── */}
             <div className="space-y-2">
-              <Label>Colors</Label>
+              <Label>Өнгө</Label>
 
               <div className="flex flex-wrap gap-2">
                 {allColorOptions.map(c => (
@@ -462,7 +476,7 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
                   onClick={() => setShowCustomColor(true)}
                   className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white border border-dashed border-slate-700 hover:border-slate-500 rounded-lg px-3 py-1.5 w-full justify-center transition-colors"
                 >
-                  <Plus size={12} /> Add Custom Color
+                  <Plus size={12} /> Нэмэлтээр өнгө нэмэх
                 </button>
               )}
             </div>
@@ -490,7 +504,7 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
                   <input
                     value={variant.label}
                     onChange={e => updateVariantLabel(variant.id, e.target.value)}
-                    placeholder="Variant label (e.g. Material, Fit…)"
+                    placeholder="Variants нэр (жишээ: Материал, Fit…)"
                     aria-label="Variant label"
                     className="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:border-slate-400 placeholder:text-white/20 transition-colors"
                   />
@@ -503,7 +517,7 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
                           value={val}
                           onChange={e => updateVariantValue(variant.id, vali, e.target.value)}
                           onBlur={() => flushVariantValue(variant.id)}
-                          placeholder={`Value ${vali + 1}`}
+                          placeholder={`Утга ${vali + 1}`}
                           aria-label={`${variant.label || "Variant"} value ${vali + 1}`}
                           className="flex-1 bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:border-slate-400 placeholder:text-white/20 transition-colors"
                         />
@@ -527,14 +541,14 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
                       onClick={() => addVariantValue(variant.id)}
                       className="flex items-center gap-1 text-xs text-white/40 hover:text-white transition-colors"
                     >
-                      <Plus size={11} /> Add Value
+                      <Plus size={11} /> Утга нэмэх
                     </button>
                     <button
                       type="button"
                       onClick={() => removeVariant(variant.id)}
-                      className="text-xs text-red-400/60 hover:text-red-400 transition-colors"
+                      className="text-xs text-red-500/70 hover:text-red-500 transition-colors"
                     >
-                      Remove Variant
+                      Variants устгах
                     </button>
                   </div>
                 </div>
@@ -546,7 +560,7 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
                 onClick={addVariant}
                 className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white border border-dashed border-slate-700 hover:border-slate-500 rounded-lg px-3 py-2 w-full justify-center transition-colors"
               >
-                <Plus size={12} /> Add Variant
+                <Plus size={12} /> Variants нэмэх
               </button>
             </div>
 
@@ -574,11 +588,11 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
 
             {/* ── Discount toggle ── */}
             <div className="flex items-center justify-between bg-slate-800 border border-slate-700 rounded-xl px-4 py-3">
-              <p className="text-white text-sm font-medium">Discount</p>
+              <p className="text-white text-sm font-medium">Хямдрал</p>
               <button
                 type="button"
                 onClick={() => setDiscountEnabled(v => !v)}
-                className={`relative w-12 h-6 rounded-full transition-colors ${discountEnabled ? "bg-blue-500" : "bg-slate-600"}`}
+                className={`relative w-12 h-6 rounded-full transition-colors ${discountEnabled ? "bg-green-500" : "bg-slate-600"}`}
                 aria-pressed={discountEnabled}
               >
                 <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${discountEnabled ? "left-7" : "left-1"}`} />
@@ -588,14 +602,14 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
             {discountEnabled && (
               <div className="space-y-4 border border-slate-700 p-4 rounded-xl">
                 <div className="space-y-2">
-                  <Label>Final Price</Label>
+                  <Label>Эцсийн үнэ</Label>
                   <div className="relative">
                     <Input type="text" value={finalPrice} onChange={e => setFinalPrice(fmtInp(e.target.value))} placeholder="0" />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-white/60">₮</span>
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label>Discount Ends At</Label>
+                  <Label>Хямдрал дуусах огноо</Label>
                   <Input type="datetime-local" value={discountEndsAt} onChange={e => setDiscountEndsAt(e.target.value)} />
                 </div>
               </div>
@@ -652,7 +666,7 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
 
             {/* ── Save ── */}
             <Button onClick={handleSubmit} disabled={loading} className="w-full py-5 bg-slate-950 hover:bg-slate-800">
-              {loading ? <><Loader2 className="animate-spin mr-2" size={16} />Saving...</> : "Save Changes"}
+              {loading ? <><Loader2 className="animate-spin mr-2" size={16} />Хадгалаж байна...</> : "Хадгалах"}
             </Button>
 
             {/* ── Delete ── */}
@@ -662,7 +676,7 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
                 onClick={() => setConfirmDelete(true)}
                 className="w-full flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 py-2.5 rounded-xl text-sm transition-colors"
               >
-                <Trash2 size={15} /> Delete Product
+                <Trash2 size={15} /> Бараа устгах
               </button>
             ) : (
               <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 space-y-3">

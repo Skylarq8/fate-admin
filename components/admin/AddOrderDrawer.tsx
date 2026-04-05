@@ -195,13 +195,13 @@ export default function AddOrderDrawer({ onSuccess }: Props) {
   return (
     <>
       <Button onClick={() => setOpen(true)} className="rounded-sm bg-white/90 text-slate-900">
-        Add Order
+        Захиалга нэмэх
       </Button>
 
       <Sheet open={open} onOpenChange={v => { setOpen(v); if (!v) reset() }}>
         <SheetContent side="right" className="w-full sm:w-[480px] overflow-y-auto bg-slate-900 text-white border-slate-700" onOpenAutoFocus={(e) => e.preventDefault()}>
           <SheetHeader className="px-5 pb-4">
-            <SheetTitle className="text-white text-lg">Add Order</SheetTitle>
+            <SheetTitle className="text-white text-lg">Захиалга нэмэх</SheetTitle>
           </SheetHeader>
 
           <div className="space-y-5 px-5 pb-8">
@@ -351,7 +351,7 @@ export default function AddOrderDrawer({ onSuccess }: Props) {
 
             {/* ── Submit ── */}
             <Button onClick={handleSubmit} disabled={loading} className="w-full py-5 bg-slate-950 hover:bg-slate-800">
-              {loading ? <><Loader2 className="animate-spin mr-2" size={16} /> Creating...</> : "Create Order"}
+              {loading ? <><Loader2 className="animate-spin mr-2" size={16} /> Захиалга үүсгэж байна...</> : "Захиалга нэмэх"}
             </Button>
 
           </div>

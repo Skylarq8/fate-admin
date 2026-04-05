@@ -15,7 +15,7 @@ interface NavItem { title: string; href: string; icon: React.ReactNode }
 const navItems: NavItem[] = [
   { title: "Тойм",   href: "/dashboard/overview",   icon: <HomeIcon         size={22} /> },
   { title: "Бараа",   href: "/dashboard/products",   icon: <BoxIcon          size={22} /> },
-  { title: "Ангилал", href: "/dashboard/categories", icon: <TagIcon          size={22} /> },
+  { title: "Категори", href: "/dashboard/categories", icon: <TagIcon          size={22} /> },
   { title: "Захиалга",     href: "/dashboard/orders",     icon: <ShoppingCartIcon size={22} /> },
   { title: "Купон",    href: "/dashboard/coupons",    icon: <TicketIcon       size={22} /> },
   { title: "Статистик",  href: "/dashboard/analytics",  icon: <ChartPieIcon     size={22} /> },

@@ -78,7 +78,7 @@ export default function AddCategoryModal({ onSuccess }: Props) {
   return (
     <>
       <Button onClick={() => setOpen(true)} className="rounded-sm bg-white/90 text-slate-900">
-        Add Category
+        Категори нэмэх
       </Button>
 
       {open && (
@@ -91,7 +91,7 @@ export default function AddCategoryModal({ onSuccess }: Props) {
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <h2 className="text-white font-semibold text-lg">Add Category</h2>
+              <h2 className="text-white font-semibold text-lg">Категори нэмэх</h2>
               <button onClick={() => setOpen(false)} className="text-white/40 hover:text-white">
                 <X size={18} />
               </button>
@@ -99,12 +99,12 @@ export default function AddCategoryModal({ onSuccess }: Props) {
 
             {/* Name */}
             <div className="space-y-2">
-              <Label className="text-white">Name</Label>
+              <Label className="text-white">Категори нэр</Label>
               <Input
                 value={name}
                 onChange={e => setName(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && handleSubmit()}
-                placeholder="Category name"
+                placeholder="Категори нэр оруулна уу"
                 className="bg-slate-800 border-slate-700 text-white"
                 autoFocus
               />
@@ -142,11 +142,11 @@ export default function AddCategoryModal({ onSuccess }: Props) {
             <Button
               onClick={handleSubmit}
               disabled={loading}
-              className="w-full bg-slate-950 hover:bg-slate-800"
+              className="w-full bg-slate-950 py-5 hover:bg-slate-800"
             >
               {loading
-                ? <><Loader2 className="animate-spin mr-2" size={16} />Creating...</>
-                : "Create"
+                ? <><Loader2 className="animate-spin mr-2" size={16} />Категори үүсгэж байна...</>
+                : "Категори үүсгэх"
               }
             </Button>
           </div>
