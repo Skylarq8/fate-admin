@@ -1,7 +1,7 @@
 // 📁 components/admin/AddProductDrawer.tsx
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { ToastContainer } from "@/components/ui/toast"
 import { useToast } from "@/hooks/useToast"
-import { ChevronDown, X, Loader2, Plus } from "lucide-react"
+import { ChevronDown, X, Loader2, Plus, ImageIcon, Star } from "lucide-react"
 
 // ─────────────────────────────────────────────
 // Types
@@ -26,6 +26,15 @@ type Variant = {
   values: string[]
 }
 
+/** A file the user picked but hasn't uploaded yet */
+interface PendingImage {
+  /** Unique key for React reconciliation */
+  key: string
+  file: File
+  /** Object URL for preview — revoke on unmount */
+  previewUrl: string
+}
+
 interface AddProductDrawerProps {
   categories: Category[]
   onSuccess?: () => void
@@ -34,14 +43,97 @@ interface AddProductDrawerProps {
 // ─────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────
-const SIZE_OPTIONS  = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"]
-const COLOR_OPTIONS = ["Хар", "Цагаан", "Саарал", "Улаан", "Цэнхэр", "Ногоон", "Шар", "Улбар шар", "Ягаан"]
+const SIZE_OPTIONS        = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"]
+const COLOR_OPTIONS       = ["Хар", "Цагаан", "Саарал", "Улаан", "Цэнхэр", "Ногоон", "Шар", "Улбар шар", "Ягаан"]
+const ACCEPTED_TYPES      = ["image/jpeg", "image/png", "image/webp", "image/gif"]
+const MAX_FILE_SIZE       = 10 * 1024 * 1024  // 10 MB
+const MAX_FILE_SIZE_LABEL = "10 MB"
+
+// ─────────────────────────────────────────────
+// GridAddCell — fits inside the image grid as the last cell
+// Supports click-to-browse + drag-and-drop
+// ─────────────────────────────────────────────
+interface GridAddCellProps {
+  onFiles:    (files: File[]) => void
+  onRejected: (reasons: string[]) => void
+  disabled?:  boolean
+}
+
+function GridAddCell({ onFiles, onRejected, disabled }: GridAddCellProps) {
+  const [dragging, setDragging] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const processFiles = useCallback((raw: FileList | null) => {
+    if (!raw || raw.length === 0) return
+    const valid:    File[]   = []
+    const rejected: string[] = []
+
+    Array.from(raw).forEach(f => {
+      if (!ACCEPTED_TYPES.includes(f.type)) {
+        rejected.push(`"${f.name}" — зөвшөөрөгдөөгүй төрөл`)
+      } else if (f.size > MAX_FILE_SIZE) {
+        rejected.push(`"${f.name}" — ${MAX_FILE_SIZE_LABEL}-аас их`)
+      } else {
+        valid.push(f)
+      }
+    })
+
+    if (rejected.length) onRejected(rejected)
+    if (valid.length)    onFiles(valid)
+  }, [onFiles, onRejected])
+
+  const onDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setDragging(false)
+    if (disabled) return
+    processFiles(e.dataTransfer.files)
+  }, [disabled, processFiles])
+
+  return (
+    <div
+      onDragEnter={e => { e.preventDefault(); if (!disabled) setDragging(true) }}
+      onDragOver={e  => { e.preventDefault(); if (!disabled) setDragging(true) }}
+      onDragLeave={e => { e.preventDefault(); setDragging(false) }}
+      onDrop={onDrop}
+      onClick={() => !disabled && inputRef.current?.click()}
+      role="button"
+      aria-label="Зураг нэмэх"
+      className={[
+        "aspect-square rounded-xl border-2 border-dashed flex flex-col",
+        "items-center justify-center gap-1.5 cursor-pointer select-none",
+        "transition-all duration-150",
+        disabled
+          ? "opacity-40 cursor-not-allowed border-slate-700 bg-transparent"
+          : dragging
+            ? "border-violet-400 bg-violet-500/10"
+            : "border-slate-600 bg-slate-800/40 hover:border-slate-400 hover:bg-slate-800/70",
+      ].join(" ")}
+    >
+      <Plus
+        size={20}
+        strokeWidth={1.8}
+        className={dragging ? "text-violet-400" : "text-white/50"}
+      />
+      <span className="text-[10px] text-white/50 text-center leading-tight px-1">
+        Зураг нэмэх
+      </span>
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        accept={ACCEPTED_TYPES.join(",")}
+        className="hidden"
+        disabled={disabled}
+        onChange={e => { processFiles(e.target.files); e.target.value = "" }}
+      />
+    </div>
+  )
+}
 
 // ─────────────────────────────────────────────
 // CustomValueGroup — reusable inline list editor
 // ─────────────────────────────────────────────
 interface CustomValueGroupProps {
-  /** "Custom Size" or "Custom Color" */
   label: string
   values: string[]
   onChange: (values: string[]) => void
@@ -63,7 +155,6 @@ function CustomValueGroup({
 
   return (
     <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-3 space-y-2">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-white/60 uppercase tracking-wider">{label}</span>
         <button
@@ -76,7 +167,6 @@ function CustomValueGroup({
         </button>
       </div>
 
-      {/* Input rows */}
       <div className="space-y-1.5">
         {values.map((val, i) => (
           <div key={i} className="flex items-center gap-2">
@@ -100,7 +190,6 @@ function CustomValueGroup({
         ))}
       </div>
 
-      {/* Add another */}
       <button
         type="button"
         onClick={addField}
@@ -123,41 +212,88 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
   const [loading, setLoading] = useState(false)
 
   // ── Core fields ──
-  const [title,       setTitle]       = useState("")
-  const [description, setDescription] = useState("")
-  const [price,       setPrice]       = useState("")
-  const [finalPrice,  setFinalPrice]  = useState("")
+  const [title,           setTitle]           = useState("")
+  const [description,     setDescription]     = useState("")
+  const [price,           setPrice]           = useState("")
+  const [finalPrice,      setFinalPrice]      = useState("")
   const [discountEnabled, setDiscountEnabled] = useState(false)
   const [discountEndsAt,  setDiscountEndsAt]  = useState("")
 
   // ── Predefined selections ──
-  const [sizes,       setSizes]       = useState<string[]>([])
-  const [colors,      setColors]      = useState<string[]>([])
+  const [sizes,  setSizes]  = useState<string[]>([])
+  const [colors, setColors] = useState<string[]>([])
 
   // ── Custom additions ──
-  const [customSizes,  setCustomSizes]  = useState<string[]>([])
+  const [customSizes,     setCustomSizes]     = useState<string[]>([])
   const [showCustomSize,  setShowCustomSize]  = useState(false)
-  const [customColors, setCustomColors] = useState<string[]>([])
+  const [customColors,    setCustomColors]    = useState<string[]>([])
   const [showCustomColor, setShowCustomColor] = useState(false)
 
-  // ── Categories / Images / Variants ──
+  // ── Categories / Variants ──
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
-  const [categoryOpen, setCategoryOpen] = useState(false)
-  const [images,     setImages]     = useState<File[]>([])
-  const [variants,   setVariants]   = useState<Variant[]>([])
-  const [imageColors, setImageColors] = useState<{ [color: string]: number }>({})
-  const [primaryIndex, setPrimaryIndex] = useState(0)
+  const [categoryOpen,       setCategoryOpen]       = useState(false)
+  const [variants,           setVariants]           = useState<Variant[]>([])
 
-  // ── Derived: merged arrays for submission ──
+  // ── Image state (PendingImage — matches EditProductDrawer pattern) ──
+  const [pendingImages,  setPendingImages]  = useState<PendingImage[]>([])
+  const [primaryKey,     setPrimaryKey]     = useState<string | null>(null)
+  // imageColors: maps color name → pending image key
+  const [imageColors,    setImageColors]    = useState<Record<string, string>>({})
+
+  // Revoke object URLs on unmount
+  useEffect(() => {
+    return () => { pendingImages.forEach(p => URL.revokeObjectURL(p.previewUrl)) }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Derived ──
   const allSizes  = [...sizes,  ...customSizes.filter(Boolean)]
   const allColors = [...colors, ...customColors.filter(Boolean)]
 
-  useEffect(() => {
-    const color = allColors.find(c => imageColors[c] !== undefined)
-    if (color) setPrimaryIndex(imageColors[color])
-  }, [imageColors, allColors])
+  // ─────────────────────────────────────────────
+  // Image handlers
+  // ─────────────────────────────────────────────
+  const handleNewFiles = useCallback((files: File[]) => {
+    const newPending: PendingImage[] = files.map(file => ({
+      key:        `${file.name}-${Date.now()}-${Math.random()}`,
+      file,
+      previewUrl: URL.createObjectURL(file),
+    }))
+    setPendingImages(prev => {
+      const updated = [...prev, ...newPending]
+      // Auto-set first image as primary if none set yet
+      if (!primaryKey && updated.length > 0) setPrimaryKey(updated[0].key)
+      return updated
+    })
+  }, [primaryKey])
 
-  // ── Variant updaters ──
+  const handleRejectedFiles = useCallback((reasons: string[]) => {
+    const first = reasons[0]
+    const extra = reasons.length > 1 ? ` (болон ${reasons.length - 1} файл)` : ""
+    error(`${first}${extra}`)
+  }, [error])
+
+  const removePendingImage = (key: string) => {
+    setPendingImages(prev => {
+      const target = prev.find(p => p.key === key)
+      if (target) URL.revokeObjectURL(target.previewUrl)
+      const updated = prev.filter(p => p.key !== key)
+      // If removed image was primary, promote the next one
+      if (primaryKey === key) {
+        setPrimaryKey(updated.length > 0 ? updated[0].key : null)
+      }
+      return updated
+    })
+    // Remove any color mapping pointing to this key
+    setImageColors(prev => {
+      const next = { ...prev }
+      Object.keys(next).forEach(c => { if (next[c] === key) delete next[c] })
+      return next
+    })
+  }
+
+  // ─────────────────────────────────────────────
+  // Variant updaters
+  // ─────────────────────────────────────────────
   const addVariant = () =>
     setVariants(prev => [...prev, { label: "", values: [""] }])
 
@@ -173,9 +309,7 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
   const updateVariantValue = (vi: number, vali: number, text: string) =>
     setVariants(prev =>
       prev.map((v, i) =>
-        i === vi
-          ? { ...v, values: v.values.map((val, j) => j === vali ? text : val) }
-          : v
+        i === vi ? { ...v, values: v.values.map((val, j) => j === vali ? text : val) } : v
       )
     )
 
@@ -210,16 +344,8 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
       prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]
     )
 
-  const toggleChip = (
-    val: string,
-    list: string[],
-    setter: (v: string[]) => void
-  ) => setter(list.includes(val) ? list.filter(v => v !== val) : [...list, val])
-
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files) return
-    setImages(prev => [...prev, ...Array.from(e.target.files!)])
-  }
+  const toggleChip = (val: string, list: string[], setter: (v: string[]) => void) =>
+    setter(list.includes(val) ? list.filter(v => v !== val) : [...list, val])
 
   const resetForm = () => {
     setTitle(""); setDescription(""); setPrice(""); setFinalPrice("")
@@ -227,8 +353,10 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
     setSizes([]); setColors([])
     setCustomSizes([]); setShowCustomSize(false)
     setCustomColors([]); setShowCustomColor(false)
-    setSelectedCategories([]); setImages([])
-    setVariants([]); setImageColors({}); setPrimaryIndex(0)
+    setSelectedCategories([])
+    pendingImages.forEach(p => URL.revokeObjectURL(p.previewUrl))
+    setPendingImages([]); setPrimaryKey(null); setImageColors({})
+    setVariants([])
   }
 
   // ─────────────────────────────────────────────
@@ -238,7 +366,7 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
     if (!title.trim())                   return error("Барааны нэр оруулна уу.")
     if (!description.trim())             return error("Тайлбар оруулна уу.")
     if (!price)                          return error("Үнэ оруулна уу.")
-    if (images.length === 0)             return error("Дор хаяж 1 зураг оруулна уу.")
+    if (pendingImages.length === 0)      return error("Дор хаяж 1 зураг оруулна уу.")
     if (selectedCategories.length === 0) return error("Category сонгоно уу.")
     if (discountEnabled) {
       if (!finalPrice)     return error("Хямдарсан үнэ оруулна уу.")
@@ -247,19 +375,26 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
         return error("Хямдарсан үнэ нь үндсэн үнээс бага байх ёстой.")
     }
 
+    // Build imageColors as { color: fileIndex } and primaryIndex for the API
+    const primaryIndex = pendingImages.findIndex(p => p.key === primaryKey)
+    const imageColorsForApi: Record<string, number> = {}
+    Object.entries(imageColors).forEach(([color, key]) => {
+      const idx = pendingImages.findIndex(p => p.key === key)
+      if (idx !== -1) imageColorsForApi[color] = idx
+    })
+
     const formData = new FormData()
     formData.append("title",           title.trim())
     formData.append("description",     description.trim())
     formData.append("price",           String(parsePrice(price)))
     formData.append("discountEnabled", String(discountEnabled))
-    // Merge predefined + custom before sending
     formData.append("sizes",           JSON.stringify(allSizes))
     formData.append("colors",          JSON.stringify(allColors))
     formData.append("variants",        JSON.stringify(variants))
     formData.append("categories",      JSON.stringify(selectedCategories))
-    formData.append("imageColors",     JSON.stringify(imageColors))
-    formData.append("primaryIndex",    String(primaryIndex))
-    images.forEach(img => formData.append("images", img))
+    formData.append("imageColors",     JSON.stringify(imageColorsForApi))
+    formData.append("primaryIndex",    String(primaryIndex >= 0 ? primaryIndex : 0))
+    pendingImages.forEach(p => formData.append("images", p.file))
     if (discountEnabled) {
       formData.append("finalPrice",     String(parsePrice(finalPrice)))
       formData.append("discountEndsAt", new Date(discountEndsAt).toISOString())
@@ -300,50 +435,120 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
 
           <div className="space-y-4 px-5 pb-8">
 
-            {/* ── Images ── */}
+            {/* ── Product Images ── */}
             <div className="space-y-2">
-              <Label>Барааны зурагууд</Label>
-              <label className="flex items-center justify-center w-full h-24 border-2 border-dashed border-slate-700 rounded-lg cursor-pointer hover:bg-slate-800">
-                <span className="text-sm text-white/40">Зураг оруулах</span>
-                <input type="file" multiple accept="image/*" onChange={handleImageUpload} className="hidden" />
-              </label>
-              {images.length > 0 && (
-                <div className="grid grid-cols-3 gap-2">
-                  {images.map((img, i) => (
-                    <div key={i} className="relative rounded-md overflow-hidden border border-slate-700">
+              <Label className="flex items-center gap-1.5">
+                <ImageIcon size={14} /> Барааны зурагууд
+                {pendingImages.length > 0 && (
+                  <span className="text-white/30 font-normal text-xs">({pendingImages.length})</span>
+                )}
+              </Label>
+
+              {/* Image grid — always rendered; GridAddCell is the last slot */}
+              <div className="grid grid-cols-3 gap-2">
+
+                {pendingImages.map(p => {
+                  const isPrimary = p.key === primaryKey
+                  // Find color mapped to this image
+                  const mappedColor = Object.entries(imageColors).find(([, k]) => k === p.key)?.[0] ?? ""
+
+                  return (
+                    <div
+                      key={p.key}
+                      className="group relative aspect-square rounded-xl overflow-hidden border border-slate-700 bg-slate-800"
+                    >
+                      <img
+                        src={p.previewUrl}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
+
+                      {/* Primary badge — top-left (mobile always visible) */}
+                      {isPrimary && (
+                        <div className="absolute top-1 left-1 bg-amber-500/90 text-amber-950 text-[9px] font-semibold px-1.5 py-0.5 rounded-md flex items-center gap-0.5 pointer-events-none z-10">
+                          <Star size={7} className="fill-current" /> Primary
+                        </div>
+                      )}
+
+                      {/* Mobile X — top-right */}
                       <button
                         type="button"
-                        onClick={() => setPrimaryIndex(i)}
-                        className={`absolute top-1 left-1 text-[10px] px-1.5 py-0.5 rounded z-10 ${
-                          primaryIndex === i ? "bg-amber-500 text-white" : "bg-black/60 text-white/60"
-                        }`}
+                        onClick={() => removePendingImage(p.key)}
+                        aria-label="Хасах"
+                        className="md:hidden absolute top-1 right-1 w-5 h-5 rounded-full bg-black/65 backdrop-blur-sm flex items-center justify-center text-white active:opacity-60 z-20"
                       >
-                        {primaryIndex === i ? "Primary" : "Set"}
+                        <X size={10} strokeWidth={2.5} />
                       </button>
-                      <img src={URL.createObjectURL(img)} className="w-full h-24 object-cover" alt="" />
+
+                      {/* Mobile Set primary — top-left (only when not primary) */}
+                      {!isPrimary && (
+                        <button
+                          type="button"
+                          onClick={() => setPrimaryKey(p.key)}
+                          aria-label="Primary болгох"
+                          className="md:hidden absolute top-1 left-1 h-5 rounded-full bg-black/65 backdrop-blur-sm flex items-center justify-center gap-0.5 px-1.5 text-white text-[9px] font-medium active:opacity-60 z-20"
+                        >
+                          <Star size={9} /> Set
+                        </button>
+                      )}
+
+                      {/* Color select — always at bottom-1, never conflicts with badge */}
                       {allColors.length > 0 && (
                         <select
-                          value={Object.entries(imageColors).find(([, idx]) => idx === i)?.[0] ?? ""}
+                          value={mappedColor}
                           onChange={e => {
                             const color = e.target.value
-                            if (!color) return
-                            setImageColors(prev => ({ ...prev, [color]: i }))
+                            setImageColors(prev => {
+                              const next = { ...prev }
+                              // Remove old binding for this image key
+                              Object.keys(next).forEach(c => {
+                                if (next[c] === p.key) delete next[c]
+                              })
+                              // Set new binding
+                              if (color) next[color] = p.key
+                              return next
+                            })
                           }}
-                          className="absolute bottom-1 left-1 right-1 text-[10px] bg-black/70 text-white rounded px-1 py-0.5"
+                          onClick={e => e.stopPropagation()}
+                          className="absolute bottom-1 left-1 right-1 text-[10px] bg-black/70 text-white rounded px-1 py-0.5 z-20"
                         >
-                          <option value="">No color</option>
+                          <option value="">Өнгө холбоогүй</option>
                           {allColors.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                       )}
-                      <X
-                        onClick={() => setImages(prev => prev.filter((_, idx) => idx !== i))}
-                        className="absolute top-1 right-1 bg-black/60 text-white rounded cursor-pointer"
-                        size={18}
-                      />
+
+                      {/* Desktop hover overlay */}
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity hidden md:flex items-center justify-center gap-1.5">
+                        {!isPrimary && (
+                          <button
+                            type="button"
+                            onClick={() => setPrimaryKey(p.key)}
+                            title="Primary болгох"
+                            className="w-7 h-7 bg-white/10 hover:bg-amber-500/80 rounded-lg flex items-center justify-center transition-colors"
+                          >
+                            <Star size={12} className="text-white" />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => removePendingImage(p.key)}
+                          title="Хасах"
+                          className="w-7 h-7 bg-white/10 hover:bg-red-500/80 rounded-lg flex items-center justify-center transition-colors"
+                        >
+                          <X size={12} className="text-white" />
+                        </button>
+                      </div>
                     </div>
-                  ))}
-                </div>
-              )}
+                  )
+                })}
+
+                {/* Add cell — always last */}
+                <GridAddCell
+                  onFiles={handleNewFiles}
+                  onRejected={handleRejectedFiles}
+                  disabled={loading}
+                />
+              </div>
             </div>
 
             {/* ── Name ── */}
@@ -394,8 +599,6 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
             {/* ── Sizes ── */}
             <div className="space-y-2">
               <Label>Хэмжээ</Label>
-
-              {/* Predefined chips */}
               <div className="flex flex-wrap gap-2">
                 {SIZE_OPTIONS.map(s => (
                   <button
@@ -413,7 +616,6 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
                 ))}
               </div>
 
-              {/* Custom size group */}
               {showCustomSize && (
                 <CustomValueGroup
                   label="Нэмэлт хэмжээ"
@@ -424,7 +626,6 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
                 />
               )}
 
-              {/* Chips for entered custom sizes */}
               {customSizes.filter(Boolean).length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {customSizes.filter(Boolean).map((s, i) => (
@@ -441,8 +642,7 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
                   onClick={() => { setShowCustomSize(true); setCustomSizes([""]) }}
                   className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white border border-dashed border-slate-700 hover:border-slate-500 rounded-lg px-3 py-1.5 w-full justify-center transition-colors"
                 >
-                  <Plus size={12} />
-                  Нэмэлтээр хэмжээ нэмэх
+                  <Plus size={12} /> Нэмэлтээр хэмжээ нэмэх
                 </button>
               )}
             </div>
@@ -450,8 +650,6 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
             {/* ── Colors ── */}
             <div className="space-y-2">
               <Label>Өнгө</Label>
-
-              {/* Predefined chips */}
               <div className="flex flex-wrap gap-2">
                 {COLOR_OPTIONS.map(c => (
                   <button
@@ -469,7 +667,6 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
                 ))}
               </div>
 
-              {/* Custom color group */}
               {showCustomColor && (
                 <CustomValueGroup
                   label="Нэмэлт өнгө"
@@ -480,7 +677,6 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
                 />
               )}
 
-              {/* Chips for entered custom colors */}
               {customColors.filter(Boolean).length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {customColors.filter(Boolean).map((c, i) => (
@@ -497,8 +693,7 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
                   onClick={() => { setShowCustomColor(true); setCustomColors([""]) }}
                   className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white border border-dashed border-slate-700 hover:border-slate-500 rounded-lg px-3 py-1.5 w-full justify-center transition-colors"
                 >
-                  <Plus size={12} />
-                  Нэмэлтээр өнгө нэмэх
+                  <Plus size={12} /> Нэмэлтээр өнгө нэмэх
                 </button>
               )}
             </div>
@@ -518,7 +713,6 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
                   key={vi}
                   className="bg-slate-800/60 border border-slate-700 rounded-xl p-3 space-y-2.5"
                 >
-                  {/* Label input */}
                   <input
                     value={variant.label}
                     onChange={e => updateVariantLabel(vi, e.target.value)}
@@ -527,7 +721,6 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
                     className="w-full bg-slate-800 border border-slate-700 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:border-slate-400 placeholder:text-white/20 transition-colors"
                   />
 
-                  {/* Value rows */}
                   <div className="space-y-1.5">
                     {variant.values.map((val, vali) => (
                       <div key={vali} className="flex items-center gap-2">
@@ -551,15 +744,13 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
                     ))}
                   </div>
 
-                  {/* Footer actions */}
                   <div className="flex items-center justify-between pt-0.5">
                     <button
                       type="button"
                       onClick={() => addVariantValue(vi)}
                       className="flex items-center gap-1 text-xs text-white/40 hover:text-white transition-colors"
                     >
-                      <Plus size={11} />
-                      Утга нэмэх
+                      <Plus size={11} /> Утга нэмэх
                     </button>
                     <button
                       type="button"
@@ -572,14 +763,12 @@ export default function AddProductDrawer({ categories, onSuccess }: AddProductDr
                 </div>
               ))}
 
-              {/* Add Variant button — always visible at the bottom */}
               <button
                 type="button"
                 onClick={addVariant}
                 className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white border border-dashed border-slate-700 hover:border-slate-500 rounded-lg px-3 py-2 w-full justify-center transition-colors"
               >
-                <Plus size={12} />
-                Variants нэмэх
+                <Plus size={12} /> Variants нэмэх
               </button>
             </div>
 

@@ -1,7 +1,7 @@
 // 📁 components/admin/EditProductDrawer.tsx
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,7 +10,10 @@ import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ToastContainer } from "@/components/ui/toast"
 import { useToast } from "@/hooks/useToast"
-import { ChevronDown, X, Loader2, Trash2, Star, ImageIcon, Plus } from "lucide-react"
+import {
+  ChevronDown, X, Loader2, Trash2, Star,
+  ImageIcon, Plus, Upload, AlertCircle,
+} from "lucide-react"
 import { Product, VariantOption } from "@/components/admin/ProductDetailModal"
 
 // ─────────────────────────────────────────────
@@ -22,12 +25,29 @@ interface Category {
   parentId: string | null
 }
 
-// Local variant type — flat, without DB fields like `id` / `order`
 type Variant = {
-  id: string      // temp-* for new ones, real id for existing
+  id: string
   label: string
   values: string[]
   order: number
+}
+
+/** Represents a committed image already in the DB */
+interface ExistingImage {
+  id: string
+  url: string
+  isPrimary: boolean
+  order: number
+  variantColor?: string | null
+}
+
+/** A file the user picked but hasn't uploaded yet */
+interface PendingImage {
+  /** Unique key for React reconciliation */
+  key: string
+  file: File
+  /** Object URL for preview — revoke on unmount */
+  previewUrl: string
 }
 
 interface Props {
@@ -43,14 +63,16 @@ interface Props {
 // ─────────────────────────────────────────────
 const SIZE_OPTIONS  = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"]
 const COLOR_OPTIONS = ["Хар", "Цагаан", "Саарал", "Улаан", "Цэнхэр", "Ногоон", "Шар", "Улбар шар", "Ягаан"]
+const ACCEPTED_TYPES      = ["image/jpeg", "image/png", "image/webp", "image/gif"]
+const MAX_FILE_SIZE       = 10 * 1024 * 1024  // 10 MB
+const MAX_FILE_SIZE_LABEL = "10 MB"
 
 // ─────────────────────────────────────────────
-// InlineCustomInput — single-field "Add Custom" input
-// Commits value on Enter or blur; closes on Escape or empty blur
+// InlineCustomInput
 // ─────────────────────────────────────────────
 interface InlineCustomInputProps {
   placeholder: string
-  existing: string[]             // to prevent duplicates
+  existing: string[]
   onCommit: (value: string) => void
   onClose: () => void
 }
@@ -63,9 +85,7 @@ function InlineCustomInput({ placeholder, existing, onCommit, onClose }: InlineC
 
   const commit = () => {
     const trimmed = val.trim()
-    if (trimmed && !existing.includes(trimmed)) {
-      onCommit(trimmed)
-    }
+    if (trimmed && !existing.includes(trimmed)) onCommit(trimmed)
     onClose()
   }
 
@@ -85,7 +105,7 @@ function InlineCustomInput({ placeholder, existing, onCommit, onClose }: InlineC
       />
       <button
         type="button"
-        onMouseDown={e => e.preventDefault()} // prevent blur before click
+        onMouseDown={e => e.preventDefault()}
         onClick={onClose}
         className="text-white/30 hover:text-white/60 transition-colors"
       >
@@ -96,9 +116,98 @@ function InlineCustomInput({ placeholder, existing, onCommit, onClose }: InlineC
 }
 
 // ─────────────────────────────────────────────
+// GridAddCell — fits inside the image grid as the last cell
+// Supports click-to-browse + drag-and-drop
+// Validates file type and size; calls onRejected for bad files
+// ─────────────────────────────────────────────
+interface GridAddCellProps {
+  onFiles:    (files: File[]) => void
+  onRejected: (reasons: string[]) => void
+  disabled?:  boolean
+}
+
+function GridAddCell({ onFiles, onRejected, disabled }: GridAddCellProps) {
+  const [dragging, setDragging] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const processFiles = useCallback((raw: FileList | null) => {
+    if (!raw || raw.length === 0) return
+    const valid:    File[]   = []
+    const rejected: string[] = []
+
+    Array.from(raw).forEach(f => {
+      if (!ACCEPTED_TYPES.includes(f.type)) {
+        rejected.push(`"${f.name}" — зөвшөөрөгдөөгүй төрөл`)
+      } else if (f.size > MAX_FILE_SIZE) {
+        rejected.push(`"${f.name}" — ${MAX_FILE_SIZE_LABEL}-аас их`)
+      } else {
+        valid.push(f)
+      }
+    })
+
+    if (rejected.length) onRejected(rejected)
+    if (valid.length)    onFiles(valid)
+  }, [onFiles, onRejected])
+
+  const onDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setDragging(false)
+    if (disabled) return
+    processFiles(e.dataTransfer.files)
+  }, [disabled, processFiles])
+
+  return (
+    // aspect-square matches sibling image cells in the same grid
+    <div
+      onDragEnter={e => { e.preventDefault(); if (!disabled) setDragging(true) }}
+      onDragOver={e  => { e.preventDefault(); if (!disabled) setDragging(true) }}
+      onDragLeave={e => { e.preventDefault(); setDragging(false) }}
+      onDrop={onDrop}
+      onClick={() => !disabled && inputRef.current?.click()}
+      role="button"
+      aria-label="Зураг нэмэх"
+      className={[
+        "aspect-square rounded-xl border-2 border-dashed flex flex-col",
+        "items-center justify-center gap-1.5 cursor-pointer select-none",
+        "transition-all duration-150",
+        disabled
+          ? "opacity-40 cursor-not-allowed border-slate-700 bg-transparent"
+          : dragging
+            ? "border-violet-400 bg-violet-500/10"
+            : "border-slate-600 bg-slate-800/40 hover:border-slate-400 hover:bg-slate-800/70",
+      ].join(" ")}
+    >
+      <Plus
+        size={20}
+        strokeWidth={1.8}
+        className={dragging ? "text-violet-400" : "text-white/50"}
+      />
+      <span className="text-[10px] text-white/50 text-center leading-tight px-1">
+        Зураг нэмэх
+      </span>
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        accept={ACCEPTED_TYPES.join(",")}
+        className="hidden"
+        disabled={disabled}
+        onChange={e => { processFiles(e.target.files); e.target.value = "" }}
+      />
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────
 // Main Component
 // ─────────────────────────────────────────────
-export default function EditProductDrawer({ product, categories, onClose, onSuccess, onDeleted }: Props) {
+export default function EditProductDrawer({
+  product,
+  categories,
+  onClose,
+  onSuccess,
+  onDeleted,
+}: Props) {
   const { toasts, remove, success, error } = useToast()
 
   const fmt    = (n: number) => new Intl.NumberFormat("mn-MN").format(n)
@@ -116,40 +225,49 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
   )
   const [status, setStatus] = useState<"active" | "inactive">(product.status)
 
-  // ── Sizes — predefined selection + custom additions ──
-  // Separate out what came from the product: predefined vs custom
+  // ── Sizes / Colors ──
   const [sizes,           setSizes]           = useState<string[]>(product.sizes)
-  const [customSizes,     setCustomSizes]     = useState<string[]>(
-    // Any size not in SIZE_OPTIONS is already a custom value
-    product.sizes.filter(s => !SIZE_OPTIONS.includes(s))
-  )
+  const [customSizes,     setCustomSizes]     = useState<string[]>(product.sizes.filter(s => !SIZE_OPTIONS.includes(s)))
   const [showCustomSize,  setShowCustomSize]  = useState(false)
-
-  // ── Colors — same pattern ──
   const [colors,          setColors]          = useState<string[]>(product.colors)
-  const [customColors,    setCustomColors]    = useState<string[]>(
-    product.colors.filter(c => !COLOR_OPTIONS.includes(c))
-  )
+  const [customColors,    setCustomColors]    = useState<string[]>(product.colors.filter(c => !COLOR_OPTIONS.includes(c)))
   const [showCustomColor, setShowCustomColor] = useState(false)
 
-  // ── All selectable options (predefined + custom) ──
   const allSizeOptions  = [...SIZE_OPTIONS,  ...customSizes.filter(s => !SIZE_OPTIONS.includes(s))]
   const allColorOptions = [...COLOR_OPTIONS, ...customColors.filter(c => !COLOR_OPTIONS.includes(c))]
 
   // ── Categories ──
-  const [selectedCats,  setSelectedCats]  = useState<string[]>(product.categories.map(c => c.category.id))
-  const [categoryOpen,  setCategoryOpen]  = useState(false)
+  const [selectedCats, setSelectedCats] = useState<string[]>(product.categories.map(c => c.category.id))
+  const [categoryOpen, setCategoryOpen] = useState(false)
 
   // ── UI state ──
   const [loading,       setLoading]       = useState(false)
   const [deleting,      setDeleting]      = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [imgLoading,    setImgLoading]    = useState<string | null>(null)
-  const [images,        setImages]        = useState(product.images ?? [])
+  const [uploading,     setUploading]     = useState(false)
+
+  // ── Image state ──
+  const [existingImages,  setExistingImages]  = useState<ExistingImage[]>(
+    (product.images ?? []).map(img => ({
+      id:           img.id,
+      url:          img.url,
+      isPrimary:    img.isPrimary,
+      order:        img.order,
+      variantColor: (img as any).variantColor ?? null,
+    }))
+  )
+  const [removedImageIds, setRemovedImageIds] = useState<Set<string>>(new Set())
+  const [pendingImages,   setPendingImages]   = useState<PendingImage[]>([])
 
   // ── Variants ──
   const [variants,   setVariants]   = useState<Variant[]>([])
   const [varLoading, setVarLoading] = useState(false)
+
+  // Revoke object URLs when pending images change or on unmount
+  useEffect(() => {
+    return () => { pendingImages.forEach(p => URL.revokeObjectURL(p.previewUrl)) }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch existing variants on mount
   useEffect(() => {
@@ -158,7 +276,17 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
       .then(d => setVariants(d.data ?? []))
   }, [product.id])
 
-  useEffect(() => { setImages(product.images ?? []) }, [product.id])
+  useEffect(() => {
+    setExistingImages(
+      (product.images ?? []).map(img => ({
+        id:           img.id,
+        url:          img.url,
+        isPrimary:    img.isPrimary,
+        order:        img.order,
+        variantColor: (img as any).variantColor ?? null,
+      }))
+    )
+  }, [product.id])
 
   const getCategoryLabel = (cat: Category): string => {
     const names: string[] = []
@@ -183,7 +311,6 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
     setVarLoading(false)
   }
 
-  // ── Variant updaters (mirror AddProductDrawer, but each calls saveVariants) ──
   const addVariant = () => {
     const next: Variant[] = [
       ...variants,
@@ -212,19 +339,14 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
   }
 
   const updateVariantValue = (id: string, vali: number, text: string) => {
-    const next = variants.map(v =>
-      v.id === id
-        ? { ...v, values: v.values.map((val, j) => j === vali ? text : val) }
-        : v
+    setVariants(prev =>
+      prev.map(v =>
+        v.id === id ? { ...v, values: v.values.map((val, j) => j === vali ? text : val) } : v
+      )
     )
-    setVariants(next)
-    // Don't save on every keystroke — save on blur (see input onBlur below)
   }
 
-  const flushVariantValue = (id: string) => {
-    // Called onBlur to persist the current in-memory state
-    saveVariants(variants)
-  }
+  const flushVariantValue = () => { saveVariants(variants) }
 
   const removeVariantValue = (id: string, vali: number) => {
     const next = variants.map(v =>
@@ -239,7 +361,6 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
   // ─────────────────────────────────────────────
   const addCustomSize = (val: string) => {
     if (!customSizes.includes(val)) setCustomSizes(prev => [...prev, val])
-    // Auto-select it
     if (!sizes.includes(val)) setSizes(prev => [...prev, val])
   }
 
@@ -252,24 +373,147 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
     setter(list.includes(val) ? list.filter(v => v !== val) : [...list, val])
 
   // ─────────────────────────────────────────────
-  // Image handlers
+  // Image — existing
   // ─────────────────────────────────────────────
   const handleSetPrimary = async (imageId: string) => {
-    setImgLoading(imageId)
-    await fetch(`/api/products/${product.id}/images/${imageId}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isPrimary: true }),
+    // Optimistic: flip isPrimary AND bubble the chosen image to position 0
+    // so the grid reorders instantly (critical for mobile UX).
+    setExistingImages(prev => {
+      const target = prev.find(img => img.id === imageId)
+      if (!target) return prev
+      const others = prev.filter(img => img.id !== imageId)
+      return [
+        { ...target, isPrimary: true, order: 0 },
+        ...others.map((img, i) => ({ ...img, isPrimary: false, order: i + 1 })),
+      ]
     })
-    setImages(prev => prev.map(img => ({ ...img, isPrimary: img.id === imageId })))
-    setImgLoading(null)
+
+    setImgLoading(imageId)
+    try {
+      await fetch(`/api/products/${product.id}/images/${imageId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isPrimary: true }),
+      })
+    } catch {
+      // Rollback: restore original isPrimary state from server on next load
+      setExistingImages(prev =>
+        prev.map(img => ({ ...img, isPrimary: img.id === imageId ? false : img.isPrimary }))
+      )
+    } finally {
+      setImgLoading(null)
+    }
   }
 
   const handleSetVariantColor = async (imageId: string, color: string) => {
     await fetch(`/api/products/${product.id}/images/${imageId}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ variantColor: color }),
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ variantColor: color || null }),
     })
-    setImages(prev => prev.map(img => img.id === imageId ? { ...img, variantColor: color } : img))
+    setExistingImages(prev =>
+      prev.map(img => img.id === imageId ? { ...img, variantColor: color || null } : img)
+    )
+  }
+
+  /** Optimistic delete: hide immediately, confirm with API */
+  const handleDeleteExistingImage = async (imageId: string) => {
+    // Optimistic: remove from visible list
+    setRemovedImageIds(prev => new Set([...prev, imageId]))
+
+    try {
+      const res = await fetch(`/api/products/${product.id}/images/${imageId}`, {
+        method: "DELETE",
+      })
+      if (!res.ok) {
+        // Rollback
+        setRemovedImageIds(prev => {
+          const next = new Set(prev)
+          next.delete(imageId)
+          return next
+        })
+        error("Зураг устгахад алдаа гарлаа.")
+      }
+    } catch {
+      // Rollback
+      setRemovedImageIds(prev => {
+        const next = new Set(prev)
+        next.delete(imageId)
+        return next
+      })
+      error("Сүлжээний алдаа гарлаа.")
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // Image — pending (new)
+  // ─────────────────────────────────────────────
+  const handleNewFiles = useCallback((files: File[]) => {
+    const newPending: PendingImage[] = files.map(file => ({
+      key:        `${file.name}-${Date.now()}-${Math.random()}`,
+      file,
+      previewUrl: URL.createObjectURL(file),
+    }))
+    setPendingImages(prev => [...prev, ...newPending])
+  }, [])
+
+  const handleRejectedFiles = useCallback((reasons: string[]) => {
+    // Show the first rejection reason; if multiple files were rejected, note the count
+    const first = reasons[0]
+    const extra = reasons.length > 1 ? ` (болон ${reasons.length - 1} файл)` : ""
+    error(`${first}${extra}`)
+  }, [error])
+
+  const removePendingImage = (key: string) => {
+    setPendingImages(prev => {
+      const target = prev.find(p => p.key === key)
+      if (target) URL.revokeObjectURL(target.previewUrl)
+      return prev.filter(p => p.key !== key)
+    })
+  }
+
+  // ─────────────────────────────────────────────
+  // Upload pending images → POST /api/products/[id]/images
+  // Sends all files in one multipart request (matches existing API route).
+  // Returns array of { url, publicId } objects from the server.
+  // ─────────────────────────────────────────────
+  const uploadPendingImages = async (): Promise<ExistingImage[]> => {
+    if (pendingImages.length === 0) return []
+
+    // Re-validate on the way out — belt-and-suspenders
+    const valid = pendingImages.filter(
+      p => ACCEPTED_TYPES.includes(p.file.type) && p.file.size <= MAX_FILE_SIZE
+    )
+    if (valid.length === 0) return []
+
+    const fd = new FormData()
+    valid.forEach(p => fd.append("images", p.file))
+
+    const res = await fetch(`/api/products/${product.id}/images`, {
+      method: "POST",
+      body:   fd,
+    })
+
+    // Parse the body regardless of status so we can surface the server message
+    const body = await res.json().catch(() => ({ message: "Серверийн хариу уншихад алдаа." }))
+
+    if (!res.ok) {
+      throw new Error(body.message || "Зураг оруулахад алдаа гарлаа.")
+    }
+
+    // The existing route returns { ok: true, data: { count } } via prisma.createMany
+    // which doesn't return rows. Re-fetch the image list to get fresh data.
+    const listRes = await fetch(`/api/products/${product.id}/images`)
+    if (!listRes.ok) return []
+    const listBody = await listRes.json().catch(() => ({ data: [] }))
+    const allImages: ExistingImage[] = (listBody.data ?? []).map((img: any) => ({
+      id:           img.id,
+      url:          img.url,
+      isPrimary:    img.isPrimary,
+      order:        img.order,
+      variantColor: img.variantColor ?? null,
+    }))
+    return allImages
   }
 
   // ─────────────────────────────────────────────
@@ -303,26 +547,50 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
       if (parse(finalPrice) >= parse(price)) return error("Хямдарсан үнэ нь үндсэн үнээс бага байх ёстой.")
     }
 
-    const formData = new FormData()
-    formData.append("title",           title.trim())
-    formData.append("description",     description.trim())
-    formData.append("price",           String(parse(price)))
-    formData.append("status",          status)
-    formData.append("discountEnabled", String(discountEnabled))
-    // sizes/colors already include custom values via allSizeOptions/allColorOptions selection
-    formData.append("sizes",           JSON.stringify(sizes))
-    formData.append("colors",          JSON.stringify(colors))
-    formData.append("categories",      JSON.stringify(selectedCats))
-    if (discountEnabled) {
-      formData.append("finalPrice",     String(parse(finalPrice)))
-      formData.append("discountEndsAt", new Date(discountEndsAt).toISOString())
-    }
-
+    setLoading(true)
     try {
-      setLoading(true)
+      // ── Step 1: upload pending images ──────────────────────────────
+      // Done BEFORE the product PATCH so we never send dangling references.
+      if (pendingImages.length > 0) {
+        setUploading(true)
+        try {
+          const freshImages = await uploadPendingImages()
+          // Replace local state with the authoritative server list so the
+          // grid reflects real DB ids (important for subsequent edits).
+          if (freshImages.length > 0) {
+            setExistingImages(freshImages)
+            setRemovedImageIds(new Set()) // already handled server-side
+          }
+          setPendingImages([])
+        } catch (uploadErr: any) {
+          // Surface the error but do NOT abort the product field save —
+          // the user should still be able to save text changes.
+          error(uploadErr.message || "Зураг оруулахад алдаа гарлаа.")
+          // Fall through intentionally: save product fields anyway
+        } finally {
+          setUploading(false)
+        }
+      }
+
+      // ── Step 2: patch core product fields ──────────────────────────
+      const formData = new FormData()
+      formData.append("title",           title.trim())
+      formData.append("description",     description.trim())
+      formData.append("price",           String(parse(price)))
+      formData.append("status",          status)
+      formData.append("discountEnabled", String(discountEnabled))
+      formData.append("sizes",           JSON.stringify(sizes))
+      formData.append("colors",          JSON.stringify(colors))
+      formData.append("categories",      JSON.stringify(selectedCats))
+      if (discountEnabled) {
+        formData.append("finalPrice",     String(parse(finalPrice)))
+        formData.append("discountEndsAt", new Date(discountEndsAt).toISOString())
+      }
+
       const res  = await fetch(`/api/products/${product.id}`, { method: "PATCH", body: formData })
       const data = await res.json()
       if (!res.ok) { error(data.message || "Алдаа гарлаа."); return }
+
       success("Амжилттай хадгалагдлаа!")
       setTimeout(() => onSuccess(data.data), 900)
     } catch {
@@ -331,6 +599,13 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
       setLoading(false)
     }
   }
+
+  // ─────────────────────────────────────────────
+  // Derived
+  // ─────────────────────────────────────────────
+  const visibleExisting  = existingImages.filter(img => !removedImageIds.has(img.id))
+  const totalImageCount  = visibleExisting.length + pendingImages.length
+  const isBusy           = loading || uploading
 
   // ─────────────────────────────────────────────
   // Render
@@ -348,6 +623,158 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
           </SheetHeader>
 
           <div className="space-y-4 px-5 pb-8">
+            {/* Product Images */}
+            <div className="flex items-center justify-between">
+                <Label className="flex items-center gap-1.5">
+                  <ImageIcon size={14} /> Зурагнууд
+                  {totalImageCount > 0 && (
+                    <span className="text-white/30 font-normal text-xs">({totalImageCount})</span>
+                  )}
+                </Label>
+                {uploading && (
+                  <div className="flex items-center gap-1.5 text-xs text-violet-400">
+                    <Loader2 size={11} className="animate-spin" />
+                    Оруулж байна…
+                  </div>
+                )}
+              </div>
+
+              {/* ── Image grid — always rendered; GridAddCell is the last slot ── */}
+              <div className="grid grid-cols-3 gap-2">
+
+                {/* ── Existing images ── */}
+                {visibleExisting
+                  .sort((a, b) => a.order - b.order)
+                  .map(img => (
+                    <div
+                      key={img.id}
+                      className="group relative aspect-square rounded-xl overflow-hidden border border-slate-700 bg-slate-800"
+                    >
+                      <img
+                        src={img.url}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
+
+                      {/* ── Primary badge: top-left, always visible ── */}
+                      {img.isPrimary && (
+                        <div className="absolute bottom-1 left-1 bg-amber-500/90 text-amber-950 text-[9px] font-semibold px-1.5 py-0.5 rounded-md flex items-center gap-0.5 pointer-events-none z-10">
+                          <Star size={7} className="fill-current" /> Primary
+                        </div>
+                      )}
+
+                      {/* ════════════════════════════════════════
+                          MOBILE — always-visible corner buttons
+                          (md:hidden = only below 768 px)
+                      ════════════════════════════════════════ */}
+
+                      {/* Mobile X — top-right */}
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteExistingImage(img.id)}
+                        aria-label="Зураг устгах"
+                        className="md:hidden absolute top-1 right-1 w-5 h-5 rounded-full bg-black/65 backdrop-blur-sm flex items-center justify-center text-white active:opacity-60 z-20"
+                      >
+                        <X size={10} strokeWidth={2.5} />
+                      </button>
+
+                      {/* Mobile Set — bottom-left (avoids badge overlap) */}
+                      {!img.isPrimary && (
+                        <button
+                          type="button"
+                          onClick={() => handleSetPrimary(img.id)}
+                          disabled={imgLoading === img.id}
+                          aria-label="Primary болгох"
+                          className="md:hidden absolute bottom-1 left-1 h-5 rounded-full bg-black/65 backdrop-blur-sm flex items-center justify-center gap-0.5 px-1.5 text-white text-[9px] font-medium active:opacity-60 disabled:opacity-40 z-20"
+                        >
+                          {imgLoading === img.id
+                            ? <Loader2 size={9} className="animate-spin" />
+                            : <Star size={9} />
+                          }
+                          Set
+                        </button>
+                      )}
+
+                      {/* ════════════════════════════════════════
+                          DESKTOP — hover overlay
+                          (hidden md:flex = invisible on mobile)
+                      ════════════════════════════════════════ */}
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity hidden md:flex items-center justify-center gap-1.5">
+                        {!img.isPrimary && (
+                          <button
+                            type="button"
+                            onClick={() => handleSetPrimary(img.id)}
+                            disabled={imgLoading === img.id}
+                            title="Primary болгох"
+                            className="w-7 h-7 bg-white/10 hover:bg-amber-500/80 rounded-lg flex items-center justify-center transition-colors"
+                          >
+                            {imgLoading === img.id
+                              ? <Loader2 size={12} className="animate-spin text-white" />
+                              : <Star size={12} className="text-white" />
+                            }
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteExistingImage(img.id)}
+                          title="Зураг устгах"
+                          className="w-7 h-7 bg-white/10 hover:bg-red-500/80 rounded-lg flex items-center justify-center transition-colors"
+                        >
+                          <Trash2 size={12} className="text-white" />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                }
+
+                {/* ── Pending (new, not yet uploaded) images ── */}
+                {pendingImages.map(p => (
+                  <div
+                    key={p.key}
+                    className="group relative aspect-square rounded-xl overflow-hidden border border-violet-500/40 bg-slate-800"
+                  >
+                    <img
+                      src={p.previewUrl}
+                      alt=""
+                      className="w-full h-full object-cover opacity-80"
+                    />
+
+                    {/* "Шинэ" badge — top-left */}
+                    <div className="absolute top-1 left-1 bg-violet-500/90 text-white text-[9px] font-semibold px-1.5 py-0.5 rounded-md pointer-events-none z-10">
+                      Шинэ
+                    </div>
+
+                    {/* Mobile X — top-right */}
+                    <button
+                      type="button"
+                      onClick={() => removePendingImage(p.key)}
+                      aria-label="Хасах"
+                      className="md:hidden absolute top-1 right-1 w-5 h-5 rounded-full bg-black/65 backdrop-blur-sm flex items-center justify-center text-white active:opacity-60 z-20"
+                    >
+                      <X size={10} strokeWidth={2.5} />
+                    </button>
+
+                    {/* Desktop hover overlay */}
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity hidden md:flex items-center justify-center">
+                      <button
+                        type="button"
+                        onClick={() => removePendingImage(p.key)}
+                        title="Хасах"
+                        className="w-7 h-7 bg-white/10 hover:bg-red-500/80 rounded-lg flex items-center justify-center transition-colors"
+                      >
+                        <X size={12} className="text-white" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                {/* ── Add cell — always last in the grid ── */}
+                <GridAddCell
+                  onFiles={handleNewFiles}
+                  onRejected={handleRejectedFiles}
+                  disabled={isBusy}/>
+              </div>
+              {/* Product Images End */}
 
             {/* ── Name ── */}
             <div className="space-y-2">
@@ -369,8 +796,8 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
                   const cat = categories.find(c => c.id === id)
                   return (
                     <div key={id} className="flex items-center gap-1 bg-slate-800 px-3 py-1 rounded-md text-sm">
-                      {cat?.name}
-                      <X onClick={() => toggleChip(id, selectedCats, setSelectedCats)} className="text-red-500 cursor-pointer" size={14} />
+                      {cat ? getCategoryLabel(cat) : ""}
+                      <X onClick={() => toggleChip(id, selectedCats, setSelectedCats)} className="text-red-500/90 cursor-pointer" size={14} />
                     </div>
                   )
                 })}
@@ -400,8 +827,6 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
             {/* ── Sizes ── */}
             <div className="space-y-2">
               <Label>Хэмжээ</Label>
-
-              {/* All chips: predefined + custom */}
               <div className="flex flex-wrap gap-2">
                 {allSizeOptions.map(s => (
                   <button
@@ -418,8 +843,6 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
                   </button>
                 ))}
               </div>
-
-              {/* Inline custom input */}
               {showCustomSize && (
                 <InlineCustomInput
                   placeholder="e.g. One Size, 34, 38…"
@@ -428,7 +851,6 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
                   onClose={() => setShowCustomSize(false)}
                 />
               )}
-
               {!showCustomSize && (
                 <button
                   type="button"
@@ -443,7 +865,6 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
             {/* ── Colors ── */}
             <div className="space-y-2">
               <Label>Өнгө</Label>
-
               <div className="flex flex-wrap gap-2">
                 {allColorOptions.map(c => (
                   <button
@@ -460,7 +881,6 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
                   </button>
                 ))}
               </div>
-
               {showCustomColor && (
                 <InlineCustomInput
                   placeholder="e.g. Navy, Coral, Olive…"
@@ -469,7 +889,6 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
                   onClose={() => setShowCustomColor(false)}
                 />
               )}
-
               {!showCustomColor && (
                 <button
                   type="button"
@@ -500,7 +919,6 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
                   key={variant.id}
                   className="bg-slate-800/60 border border-slate-700 rounded-xl p-3 space-y-2.5"
                 >
-                  {/* Label input */}
                   <input
                     value={variant.label}
                     onChange={e => updateVariantLabel(variant.id, e.target.value)}
@@ -508,15 +926,13 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
                     aria-label="Variant label"
                     className="w-full bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:border-slate-400 placeholder:text-white/20 transition-colors"
                   />
-
-                  {/* Value rows */}
                   <div className="space-y-1.5">
                     {variant.values.map((val, vali) => (
                       <div key={vali} className="flex items-center gap-2">
                         <input
                           value={val}
                           onChange={e => updateVariantValue(variant.id, vali, e.target.value)}
-                          onBlur={() => flushVariantValue(variant.id)}
+                          onBlur={flushVariantValue}
                           placeholder={`Утга ${vali + 1}`}
                           aria-label={`${variant.label || "Variant"} value ${vali + 1}`}
                           className="flex-1 bg-slate-700 border border-slate-600 text-white text-sm rounded-lg px-3 py-1.5 outline-none focus:border-slate-400 placeholder:text-white/20 transition-colors"
@@ -533,8 +949,6 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
                       </div>
                     ))}
                   </div>
-
-                  {/* Footer actions */}
                   <div className="flex items-center justify-between pt-0.5">
                     <button
                       type="button"
@@ -554,7 +968,6 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
                 </div>
               ))}
 
-              {/* Add Variant */}
               <button
                 type="button"
                 onClick={addVariant}
@@ -615,61 +1028,56 @@ export default function EditProductDrawer({ product, categories, onClose, onSucc
               </div>
             )}
 
-            {/* ── Image variant color config ── */}
-            {images.length > 0 && (
-              <div className="space-y-2">
-                <Label className="text-white flex items-center gap-1.5">
-                  <ImageIcon size={14} /> Зургийн өнгө тохиргоо
-                </Label>
-                <p className="text-white/30 text-xs">
-                  Зургийн хажууд өнгө сонгоход тэр өнгөний бараа сонгогдоход харагдана
-                </p>
-                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                  {[...images].sort((a, b) => a.order - b.order).map(img => (
-                    <div key={img.id} className="flex items-center gap-2 bg-slate-800/60 border border-slate-700 rounded-xl p-2">
-                      <img src={img.url} className="w-12 h-12 object-cover rounded-lg flex-shrink-0" alt="" />
-                      <div className="flex-1 min-w-0 space-y-1.5">
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => handleSetPrimary(img.id)}
-                            className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg transition-colors ${
-                              img.isPrimary
-                                ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
-                                : "text-white/30 hover:text-white/60 border border-transparent hover:border-slate-600"
-                            }`}
-                          >
-                            {imgLoading === img.id
-                              ? <Loader2 size={11} className="animate-spin" />
-                              : <Star size={11} className={img.isPrimary ? "fill-amber-400" : ""} />
-                            }
-                            {img.isPrimary ? "Primary" : "Primary болгох"}
-                          </button>
-                        </div>
+            {/* ══════════════════════════════════════════════
+                IMAGE MANAGEMENT SECTION
+            ══════════════════════════════════════════════ */}
+            <div className="space-y-3">
+              {/* ── Variant color config (only for visible existing images) ── */}
+              {visibleExisting.length > 0 && colors.length > 0 && (
+                <div className="space-y-2 pt-1">
+                  <p className="text-white/40 text-xs">
+                    Зургийн өнгө холбоо — тэр өнгө сонгогдоход зураг харагдана
+                  </p>
+                  <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                    {visibleExisting.sort((a, b) => a.order - b.order).map(img => (
+                      <div
+                        key={img.id}
+                        className="flex items-center gap-2 bg-slate-800/60 border border-slate-700 rounded-xl p-2"
+                      >
+                        <img src={img.url} className="w-10 h-10 object-cover rounded-lg flex-shrink-0" alt="" />
                         <select
-                          value={(img as any).variantColor ?? ""}
+                          value={img.variantColor ?? ""}
                           onChange={e => handleSetVariantColor(img.id, e.target.value)}
-                          className="w-full bg-slate-700 border border-slate-600 text-white text-xs px-2 py-1 rounded-lg outline-none"
+                          className="flex-1 bg-slate-700 border border-slate-600 text-white text-xs px-2 py-1 rounded-lg outline-none"
                         >
                           <option value="">— Өнгө холбоогүй —</option>
-                          {/* Show all colors including custom ones */}
                           {colors.map(c => (
                             <option key={c} value={c}>{c}</option>
                           ))}
                         </select>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
+            {/* ══ end image section ══ */}
 
             {/* ── Save ── */}
-            <Button onClick={handleSubmit} disabled={loading} className="w-full py-5 bg-slate-950 hover:bg-slate-800">
-              {loading ? <><Loader2 className="animate-spin mr-2" size={16} />Хадгалаж байна...</> : "Хадгалах"}
+            <Button
+              onClick={handleSubmit}
+              disabled={isBusy}
+              className="w-full py-5 bg-slate-950 hover:bg-slate-800 disabled:opacity-50"
+            >
+              {uploading
+                ? <><Loader2 className="animate-spin mr-2" size={16} />Зураг оруулж байна…</>
+                : loading
+                  ? <><Loader2 className="animate-spin mr-2" size={16} />Хадгалаж байна…</>
+                  : "Хадгалах"
+              }
             </Button>
 
-            {/* ── Delete ── */}
+            {/* ── Delete product ── */}
             {!confirmDelete ? (
               <button
                 type="button"
