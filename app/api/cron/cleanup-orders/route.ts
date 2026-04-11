@@ -3,14 +3,15 @@ import { prisma } from "@/lib/prisma"
 
 export async function GET() {
   try {
-    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
-
     const deleted = await prisma.order.deleteMany({
       where: {
         status: "pending",
-        createdAt: { lt: oneDayAgo },
+        createdAt: { lt: new Date() },
       },
     })
+
+    const test = await prisma.order.findFirst()
+    console.log("SAMPLE ORDER:", test)
 
     console.log("🧹 Deleted pending orders:", deleted.count)
     return NextResponse.json({ success: true, deleted: deleted.count })
