@@ -61,6 +61,8 @@ export async function POST(req: NextRequest) {
       discountAmount: Math.round(discountAmount),
       usageLimit: coupon.usageLimit,
       usedCount: coupon.usedCount,
+      applyToAll: coupon.applyToAll,
+      products: coupon.products.map(p => p.productId),
     });
   } catch (err) {
     console.error(err);
