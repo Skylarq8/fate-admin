@@ -2,7 +2,8 @@
 import { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { ok, fail } from "@/lib/api-response"
-import { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client"
+import { processCouponOnOrderPayment } from "@/lib/coupon"
 
 type Ctx = { params: Promise<{ id: string }> }
 
@@ -39,10 +40,15 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     if (body.status && !allowed.includes(body.status))
       return fail(`status нь дараах утгуудын нэг байх ёстой: ${allowed.join(", ")}`)
 
-    // if items provided — recalculate totalAmount and recreate items
+    const currentOrder = await prisma.order.findUnique({ where: { id } })
+    if (!currentOrder) return fail("Захиалга олдсонгүй.", 404)
+
+    const isStatusChangeToPaid = body.status === "paid" && currentOrder.status !== "paid"
+    const hasCoupon = isStatusChangeToPaid && currentOrder.couponCode
+
     if (body.items) {
       const productIds = body.items.map(i => i.productId)
-      const products   = await prisma.product.findMany({ where: { id: { in: productIds } } })
+      const products = await prisma.product.findMany({ where: { id: { in: productIds } } })
       const productMap = new Map(products.map(p => [p.id, p]))
 
       let totalAmount = 0
@@ -53,50 +59,66 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
         totalAmount += unitPrice * item.quantity
       }
 
-      // delete old items and recreate
       await prisma.orderItem.deleteMany({ where: { orderId: id } })
+
+      let orderUpdateData: Prisma.OrderUpdateInput = {
+        ...(body.customerName && { customerName: body.customerName }),
+        ...(body.phone && { phone: body.phone }),
+        ...(body.email && { email: body.email }),
+        ...(body.shippingAddress && { shippingAddress: body.shippingAddress }),
+        ...(body.status && { status: body.status as "pending" | "paid" | "processing" | "delivered" }),
+        totalAmount: Math.round(totalAmount),
+        items: {
+          create: body.items.map(item => {
+            const p = productMap.get(item.productId)!
+            const unitPrice = p.discountEnabled && p.finalPrice ? p.finalPrice : p.price
+            return {
+              productId: item.productId,
+              quantity: item.quantity,
+              size: item.size ?? null,
+              color: item.color ?? null,
+              unitPrice,
+              variants: item.variants ? item.variants : Prisma.JsonNull,
+            }
+          }),
+        },
+      }
+
+      if (hasCoupon) {
+        const couponResult = await processCouponOnOrderPayment(id, currentOrder.couponCode!)
+        if (!couponResult.success) {
+          return fail(couponResult.message, 400)
+        }
+      }
 
       const order = await prisma.order.update({
         where: { id },
-        data: {
-          ...(body.customerName    && { customerName:    body.customerName }),
-          ...(body.phone           && { phone:           body.phone }),
-          ...(body.email           && { email:           body.email }),
-          ...(body.shippingAddress && { shippingAddress: body.shippingAddress }),
-          ...(body.status          && { status:          body.status as "pending" | "paid" | "processing" | "delivered" }),
-          totalAmount: Math.round(totalAmount),
-          items: {
-            create: body.items.map(item => {
-              const p         = productMap.get(item.productId)!
-              const unitPrice = p.discountEnabled && p.finalPrice ? p.finalPrice : p.price
-              return {
-                productId: item.productId,
-                quantity:  item.quantity,
-                size:      item.size  ?? null,
-                color:     item.color ?? null,
-                unitPrice,
-                variants: item.variants ? item.variants : Prisma.JsonNull,
-              }
-            }),
-          },
-        },
+        data: orderUpdateData,
         include,
       })
+
       return ok(order)
     }
 
-    // status-only update
+    if (hasCoupon) {
+      const couponResult = await processCouponOnOrderPayment(id, currentOrder.couponCode!)
+      if (!couponResult.success) {
+        return fail(couponResult.message, 400)
+      }
+    }
+
     const order = await prisma.order.update({
       where: { id },
       data: {
-        ...(body.customerName    && { customerName:    body.customerName }),
-        ...(body.phone           && { phone:           body.phone }),
-        ...(body.email           && { email:           body.email }),
+        ...(body.customerName && { customerName: body.customerName }),
+        ...(body.phone && { phone: body.phone }),
+        ...(body.email && { email: body.email }),
         ...(body.shippingAddress && { shippingAddress: body.shippingAddress }),
-        ...(body.status          && { status:          body.status as "pending" | "paid" | "processing" | "delivered" }),
+        ...(body.status && { status: body.status as "pending" | "paid" | "processing" | "delivered" }),
       },
       include,
     })
+
     return ok(order)
   } catch (err) {
     console.error("[orders/id] PATCH error:", err)

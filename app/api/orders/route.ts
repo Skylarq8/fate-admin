@@ -1,24 +1,33 @@
 // 📁 app/api/orders/route.ts
-// app/api/orders/route.ts
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail } from "@/lib/api-response";
+import { validateCoupon } from "@/lib/coupon";
 
 // ─── GET /api/orders ──────────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const status = searchParams.get("status"); // pending | confirmed | delivered
+  try {
+    const { searchParams } = new URL(req.url);
+    const status = searchParams.get("status");
 
-  const orders = await prisma.order.findMany({
-    where: status ? { status: status as "pending" | "paid" | "processing" | "delivered" } : {},
-    include: {
-      items: {
-        include: { product: { include: { images: { orderBy: [{ isPrimary: "desc" }] } } } },
+    console.log("[orders] GET: status =", status);
+
+    const orders = await prisma.order.findMany({
+      where: status ? { status: status as "pending" | "paid" | "processing" | "delivered" } : {},
+      include: {
+        items: {
+          include: { product: { include: { images: { orderBy: [{ isPrimary: "desc" }] } } } },
+        },
       },
-    },
-    orderBy: { createdAt: "desc" },
-  });
-  return ok(orders);
+      orderBy: { createdAt: "desc" },
+    });
+
+    console.log("[orders] GET: found", orders.length, "orders");
+    return ok(orders);
+  } catch (err) {
+    console.error("[orders] GET error:", err);
+    return fail(String(err), 500);
+  }
 }
 
 // ─── POST /api/orders ─────────────────────────────────────────────────────────
@@ -39,9 +48,8 @@ export async function POST(req: NextRequest) {
     }
     if (!items?.length) return fail("Захиалгад дор хаяж 1 бараа байх ёстой.");
 
-    // ── fetch products to calculate total ─────────────────────────────────────
     const productIds = items.map((i) => i.productId);
-    const products   = await prisma.product.findMany({ where: { id: { in: productIds } } });
+    const products = await prisma.product.findMany({ where: { id: { in: productIds } } });
     const productMap = new Map(products.map((p) => [p.id, p]));
 
     let totalAmount = 0;
@@ -52,30 +60,19 @@ export async function POST(req: NextRequest) {
       totalAmount += unitPrice * item.quantity;
     }
 
-    // ── apply coupon ──────────────────────────────────────────────────────────
+    let validatedCoupon: ValidateCouponResult["coupon"] | undefined;
+    let finalDiscount = 0;
+
     if (couponCode) {
-      const now    = new Date();
-      const coupon = await prisma.coupon.findFirst({
-        where: { code: couponCode, active: true, expiresAt: { gt: now } },
-        include: { products: true },
-      });
-      if (!coupon) return fail("Coupon хүчингүй эсвэл хугацаа дууссан байна.");
-
-      // check if coupon applies to ordered products
-      const eligible = coupon.applyToAll
-        ? true
-        : items.some((i) => coupon.products.some((cp) => cp.productId === i.productId));
-
-      if (!eligible) return fail("Энэ coupon сонгосон бараанд үйлчлэхгүй.");
-
-      if (coupon.discountPercent) {
-        totalAmount = totalAmount * (1 - coupon.discountPercent / 100);
-      } else if (coupon.discountAmount) {
-        totalAmount = Math.max(0, totalAmount - coupon.discountAmount);
+      const validation = await validateCoupon(couponCode, totalAmount);
+      if (!validation.valid) {
+        return fail(validation.message || "Coupon хүчингүй", 422);
       }
+      validatedCoupon = validation.coupon;
+      finalDiscount = validation.discountAmount || 0;
+      totalAmount = Math.max(0, totalAmount - finalDiscount);
     }
 
-    // ── create order ──────────────────────────────────────────────────────────
     const order = await prisma.order.create({
       data: {
         customerName,
@@ -84,27 +81,43 @@ export async function POST(req: NextRequest) {
         shippingAddress,
         totalAmount: Math.round(totalAmount),
         status: "pending",
+        couponCode: couponCode ? couponCode.toUpperCase() : null,
         items: {
           create: items.map((item) => {
-            const p         = productMap.get(item.productId)!;
+            const p = productMap.get(item.productId)!;
             const unitPrice = p.discountEnabled && p.finalPrice ? p.finalPrice : p.price;
             return {
               productId: item.productId,
-              size:      item.size,
-              color:     item.color,
-              quantity:  item.quantity,
+              size: item.size,
+              color: item.color,
+              quantity: item.quantity,
               unitPrice,
-              variants:  item.variants,
+              variants: item.variants,
             };
           }),
         },
       },
-      include: { items: { include: { product: { include: { images: { orderBy: [{ isPrimary: "desc" }] } } } } } },
+      include: {
+        items: {
+          include: {
+            product: {
+              include: { images: { orderBy: [{ isPrimary: "desc" }] } }
+            }
+          }
+        },
+      },
     });
 
-    return ok(order, 201);
+    return ok({
+      ...order,
+      validatedCoupon: validatedCoupon
+        ? { ...validatedCoupon, discountApplied: finalDiscount }
+        : null,
+    }, 201);
   } catch (err) {
-    console.error(err);
-    return fail("Серверийн алдаа.", 500);
+    console.error("[orders] POST error:", err);
+    return fail(String(err), 500);
   }
 }
+
+type ValidateCouponResult = Awaited<ReturnType<typeof validateCoupon>>;

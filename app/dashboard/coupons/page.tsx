@@ -2,32 +2,24 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { X, Trash2, Loader2, Tag } from "lucide-react"
+import { X, Trash2, Loader2, Tag, Infinity } from "lucide-react"
 import { ToastContainer } from "@/components/ui/toast"
 import { useToast } from "@/hooks/useToast"
 import AddCouponDrawer from "@/components/admin/AddCouponDrawer"
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-interface CouponProduct {
-  productId: string
-  product: { id: string; title: string }
-}
-
 interface Coupon {
   id: string
   code: string
-  discountPercent: number | null
-  discountAmount: number | null
-  expiresAt: string
-  applyToAll: boolean
+  discountType: "percentage" | "fixed"
+  discountValue: number
+  usageLimit: number | null
+  usedCount: number
+  expiresAt: string | null
   active: boolean
   createdAt: string
-  products: CouponProduct[]
+  updatedAt: string
 }
 
-
-
-// ─── CouponDetailModal ────────────────────────────────────────────────────────
 function CouponDetailModal({ coupon: initial, onClose, onUpdated, onDeleted }: {
   coupon: Coupon
   onClose: () => void
@@ -35,18 +27,18 @@ function CouponDetailModal({ coupon: initial, onClose, onUpdated, onDeleted }: {
   onDeleted: (id: string) => void
 }) {
   const { toasts, remove, success, error } = useToast()
-  const [coupon,  setCoupon]  = useState(initial)
+  const [coupon, setCoupon] = useState(initial)
   const [loading, setLoading] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   const fmt = (n: number) => new Intl.NumberFormat("mn-MN").format(n) + "₮"
-  const isExpired = new Date(coupon.expiresAt) < new Date()
+  const isExpired = coupon.expiresAt ? new Date(coupon.expiresAt) < new Date() : false
 
   const toggleActive = async () => {
     setLoading(true)
     try {
-      const res  = await fetch(`/api/coupons/${coupon.id}`, {
+      const res = await fetch(`/api/coupons/${coupon.id}`, {
         method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ active: !coupon.active }),
       })
@@ -56,7 +48,7 @@ function CouponDetailModal({ coupon: initial, onClose, onUpdated, onDeleted }: {
       onUpdated(data.data)
       success(data.data.active ? "Идэвхжүүлэгдлээ ✓" : "Идэвхгүй болгогдлоо ✓")
     } catch { error("Сүлжээний алдаа.") }
-    finally  { setLoading(false) }
+    finally { setLoading(false) }
   }
 
   const handleDelete = async () => {
@@ -67,7 +59,7 @@ function CouponDetailModal({ coupon: initial, onClose, onUpdated, onDeleted }: {
       success("Coupon устгагдлаа.")
       setTimeout(() => { onDeleted(coupon.id); onClose() }, 800)
     } catch { error("Сүлжээний алдаа.") }
-    finally  { setDeleting(false) }
+    finally { setDeleting(false) }
   }
 
   return (
@@ -79,7 +71,6 @@ function CouponDetailModal({ coupon: initial, onClose, onUpdated, onDeleted }: {
         </button>
 
         <div className="p-6 space-y-5">
-          {/* Code + status */}
           <div className="pr-10">
             <div className="flex items-center gap-3 flex-wrap">
               <h2 className="text-2xl font-bold text-white font-mono">{coupon.code}</h2>
@@ -96,41 +87,39 @@ function CouponDetailModal({ coupon: initial, onClose, onUpdated, onDeleted }: {
             </p>
           </div>
 
-          {/* Info cards */}
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-3">
               <p className="text-white/40 text-xs mb-1">Хөнгөлөлт</p>
               <p className="text-white font-bold text-lg">
-                {coupon.discountPercent ? `${coupon.discountPercent}%` : fmt(coupon.discountAmount!)}
+                {coupon.discountType === "percentage" 
+                  ? `${coupon.discountValue}%` 
+                  : fmt(coupon.discountValue)
+                }
               </p>
             </div>
             <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-3">
-              <p className="text-white/40 text-xs mb-1">Дуусах огноо</p>
-              <p className={`font-medium text-sm ${isExpired ? "text-red-400" : "text-white"}`}>
-                {new Date(coupon.expiresAt).toLocaleDateString("mn-MN")}
+              <p className="text-white/40 text-xs mb-1">Ашигласан</p>
+              <p className="text-white font-bold text-lg">
+                {coupon.usageLimit 
+                  ? `${coupon.usedCount} / ${coupon.usageLimit}`
+                  : <span className="flex items-center gap-1 text-green-400">
+                      <Infinity size={16} /> {coupon.usedCount}
+                    </span>
+                }
               </p>
             </div>
           </div>
 
-          {/* Apply scope */}
-          <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-4 space-y-2">
-            <p className="text-white/40 text-xs uppercase tracking-wider flex items-center gap-1.5">
-              <Tag size={12} /> Хамрах хүрээ
+          <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-3">
+            <p className="text-white/40 text-xs mb-1">Дуусах огноо</p>
+            <p className={`font-medium text-sm ${isExpired ? "text-red-400" : "text-white"}`}>
+              {coupon.expiresAt 
+                ? new Date(coupon.expiresAt).toLocaleDateString("mn-MN")
+                : "Хязгааргүй"
+              }
             </p>
-            {coupon.applyToAll ? (
-              <p className="text-white/70 text-sm">Бүх бараанд үйлчилнэ</p>
-            ) : (
-              <div className="flex flex-wrap gap-2 mt-1">
-                {coupon.products.map(cp => (
-                  <span key={cp.productId} className="bg-slate-700 text-white/70 text-xs px-2.5 py-1 rounded-full border border-slate-600">
-                    {cp.product.title}
-                  </span>
-                ))}
-              </div>
-            )}
           </div>
 
-          {/* Toggle active */}
           <div className="flex items-center justify-between bg-slate-800/60 border border-slate-700 rounded-xl px-4 py-3">
             <div>
               <p className="text-white text-sm font-medium">Идэвхтэй эсэх</p>
@@ -142,7 +131,6 @@ function CouponDetailModal({ coupon: initial, onClose, onUpdated, onDeleted }: {
             </button>
           </div>
 
-          {/* Delete */}
           {!confirmDelete ? (
             <button onClick={() => setConfirmDelete(true)}
               className="w-full flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 py-2.5 rounded-xl text-sm transition-colors">
@@ -170,15 +158,14 @@ function CouponDetailModal({ coupon: initial, onClose, onUpdated, onDeleted }: {
   )
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function CouponsPage() {
-  const [coupons,  setCoupons]  = useState<Coupon[]>([])
-  const [loading,  setLoading]  = useState(true)
+  const [coupons, setCoupons] = useState<Coupon[]>([])
+  const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Coupon | null>(null)
 
   const fetchCoupons = async () => {
     setLoading(true)
-    const res  = await fetch("/api/coupons")
+    const res = await fetch("/api/coupons")
     const data = await res.json()
     setCoupons(data.data ?? [])
     setLoading(false)
@@ -194,26 +181,24 @@ export default function CouponsPage() {
   const handleDeleted = (id: string) =>
     setCoupons(prev => prev.filter(c => c.id !== id))
 
-  const active   = coupons.filter(c => c.active && new Date(c.expiresAt) > new Date()).length
-  const expired  = coupons.filter(c => new Date(c.expiresAt) < new Date()).length
-  const inactive = coupons.filter(c => !c.active && new Date(c.expiresAt) >= new Date()).length
+  const active = coupons.filter(c => c.active && (!c.expiresAt || new Date(c.expiresAt) > new Date())).length
+  const expired = coupons.filter(c => c.expiresAt && new Date(c.expiresAt) < new Date()).length
+  const inactive = coupons.filter(c => !c.active && (!c.expiresAt || new Date(c.expiresAt) >= new Date())).length
 
   return (
     <div className="py-4 px-1 md:p-6">
-      {/* Header */}
       <div className="flex justify-between items-center mb-4 md:mb-6">
         <h1 className="text-xl md:text-2xl font-bold text-white">Хөнгөлөлтийн купон</h1>
         <AddCouponDrawer onSuccess={fetchCoupons} />
       </div>
 
-      {/* Stats */}
       {!loading && coupons.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
           {[
-            { label: "Нийт",      value: coupons.length, color: "text-white",       bg: "bg-slate-800/60",  border: "border-slate-700"    },
-            { label: "Идэвхтэй",  value: active,         color: "text-green-400",   bg: "bg-green-500/5",   border: "border-green-500/20" },
-            { label: "Идэвхгүй",  value: inactive,       color: "text-white/40",    bg: "bg-slate-800/40",  border: "border-slate-700"    },
-            { label: "Дууссан",   value: expired,        color: "text-red-400",     bg: "bg-red-500/5",     border: "border-red-500/20"   },
+            { label: "Нийт", value: coupons.length, color: "text-white", bg: "bg-slate-800/60", border: "border-slate-700" },
+            { label: "Идэвхтэй", value: active, color: "text-green-400", bg: "bg-green-500/5", border: "border-green-500/20" },
+            { label: "Идэвхгүй", value: inactive, color: "text-white/40", bg: "bg-slate-800/40", border: "border-slate-700" },
+            { label: "Дууссан", value: expired, color: "text-red-400", bg: "bg-red-500/5", border: "border-red-500/20" },
           ].map(s => (
             <div key={s.label} className={`rounded-xl border p-4 ${s.bg} ${s.border}`}>
               <p className="text-white/40 text-xs mb-2">{s.label}</p>
@@ -229,33 +214,43 @@ export default function CouponsPage() {
         <div className="text-white/40 text-sm">Coupon байхгүй байна.</div>
       ) : (
         <>
-          {/* Desktop table */}
           <div className="hidden md:block rounded-xl border border-slate-700 overflow-hidden">
             <table className="w-full text-sm text-white">
               <thead className="bg-slate-800 text-white/50 text-xs uppercase">
                 <tr>
                   <th className="px-4 py-3 text-left">Код</th>
                   <th className="px-4 py-3 text-left">Хөнгөлөлт</th>
-                  <th className="px-4 py-3 text-left">Хамрах хүрээ</th>
+                  <th className="px-4 py-3 text-left">Ашигллах тоо</th>
                   <th className="px-4 py-3 text-left">Дуусах огноо</th>
                   <th className="px-4 py-3 text-left">Статус</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
                 {coupons.map(coupon => {
-                  const isExpired = new Date(coupon.expiresAt) < new Date()
+                  const isExpired = coupon.expiresAt && new Date(coupon.expiresAt) < new Date()
                   return (
                     <tr key={coupon.id} onClick={() => setSelected(coupon)}
                       className="hover:bg-slate-800/60 cursor-pointer transition-colors">
                       <td className="px-4 py-3 font-mono font-bold text-white">{coupon.code}</td>
                       <td className="px-4 py-3 font-semibold text-white">
-                        {coupon.discountPercent ? `${coupon.discountPercent}%` : fmt(coupon.discountAmount!)}
+                        {coupon.discountType === "percentage" 
+                          ? `${coupon.discountValue}%` 
+                          : fmt(coupon.discountValue)
+                        }
                       </td>
                       <td className="px-4 py-3 text-white/60 text-xs">
-                        {coupon.applyToAll ? "Бүх бараанд" : `${coupon.products.length} бараа`}
+                        {coupon.usageLimit 
+                          ? `${coupon.usedCount} / ${coupon.usageLimit}`
+                          : <span className="flex items-center gap-1 text-green-400">
+                              <Infinity size={12} /> {coupon.usedCount}
+                            </span>
+                        }
                       </td>
                       <td className={`px-4 py-3 text-xs ${isExpired ? "text-red-400" : "text-white/60"}`}>
-                        {new Date(coupon.expiresAt).toLocaleDateString("mn-MN")}
+                        {coupon.expiresAt 
+                          ? new Date(coupon.expiresAt).toLocaleDateString("mn-MN")
+                          : "—"
+                        }
                       </td>
                       <td className="px-4 py-3">
                         <span className={`text-xs px-2.5 py-1 rounded-full border ${
@@ -275,10 +270,9 @@ export default function CouponsPage() {
             </table>
           </div>
 
-          {/* Mobile cards */}
           <div className="md:hidden space-y-3">
             {coupons.map(coupon => {
-              const isExpired = new Date(coupon.expiresAt) < new Date()
+              const isExpired = coupon.expiresAt && new Date(coupon.expiresAt) < new Date()
               return (
                 <div key={coupon.id} onClick={() => setSelected(coupon)}
                   className="bg-slate-800/60 border border-slate-700 rounded-xl p-4 cursor-pointer active:bg-slate-700 transition-colors">
@@ -296,15 +290,24 @@ export default function CouponsPage() {
                   </div>
                   <div className="flex items-center gap-3 mt-2">
                     <p className="text-white font-semibold text-sm">
-                      {coupon.discountPercent ? `${coupon.discountPercent}%` : fmt(coupon.discountAmount!)}
+                      {coupon.discountType === "percentage" 
+                        ? `${coupon.discountValue}%` 
+                        : fmt(coupon.discountValue)
+                      }
                     </p>
                     <span className="text-white/30">·</span>
                     <p className="text-white/50 text-xs">
-                      {coupon.applyToAll ? "Бүх бараанд" : `${coupon.products.length} бараа`}
+                      {coupon.usageLimit 
+                        ? `${coupon.usedCount}/${coupon.usageLimit}`
+                        : "Хязгааргүй"
+                      }
                     </p>
                     <span className="text-white/30">·</span>
                     <p className={`text-xs ${isExpired ? "text-red-400" : "text-white/50"}`}>
-                      {new Date(coupon.expiresAt).toLocaleDateString("mn-MN")}
+                      {coupon.expiresAt 
+                        ? new Date(coupon.expiresAt).toLocaleDateString("mn-MN")
+                        : "—"
+                      }
                     </p>
                   </div>
                 </div>
