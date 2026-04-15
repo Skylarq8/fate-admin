@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
             },
           }
         : {}),
-      ...(filter === "discount"
+      ...(filter === "featured"
         ? { discountEnabled: true }
         : {}),
     },
