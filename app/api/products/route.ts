@@ -10,6 +10,8 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const status = searchParams.get("status");
   const search = searchParams.get("search");
+  const category = searchParams.get("category");
+  const filter = searchParams.get("filter");
 
   // Хугацаа дууссан хямдралуудыг автоматаар унтраана
   await prisma.product.updateMany({
@@ -24,6 +26,20 @@ export async function GET(req: NextRequest) {
     where: {
       ...(status ? { status: status as "active" | "inactive" } : {}),
       ...(search ? { title: { contains: search, mode: "insensitive" } } : {}),
+      ...(category
+        ? {
+            categories: {
+              some: {
+                category: {
+                  slug: category,
+                },
+              },
+            },
+          }
+        : {}),
+      ...(filter === "featured"
+        ? { discountEnabled: true }
+        : {}),
     },
     include: {
       images: { orderBy: [{ isPrimary: "desc" }, { order: "asc" }] },
