@@ -39,18 +39,27 @@ export async function GET(req: NextRequest) {
   };
 
   // 🧠 ORDER
-  let orderBy: any = { createdAt: "desc" };
+  let orderBy: any = {
+    createdAt: "desc",
+  };
 
-  if (filter === "discount") {
-    where.discountEnabled = true;
-  }
+  switch (filter) {
+    case "discount":
+      where.discountEnabled = true;
+      break;
 
-  if (filter === "newest") {
-    orderBy = { createdAt: "desc" };
-  }
+    case "newest":
+      where.discountEnabled = false; // 🔥 hide discount
+      orderBy = { createdAt: "desc" };
+      break;
 
-  if (filter === "oldest") {
-    orderBy = { createdAt: "asc" };
+    case "oldest":
+      where.discountEnabled = false; // 🔥 hide discount
+      orderBy = { createdAt: "asc" };
+      break;
+
+    default:
+      break;
   }
 
   // 🔥 MAIN QUERY
