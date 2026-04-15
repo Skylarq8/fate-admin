@@ -22,31 +22,46 @@ export async function GET(req: NextRequest) {
     data: { discountEnabled: false },
   });
 
-  const products = await prisma.product.findMany({
-    where: {
-      ...(status ? { status: status as "active" | "inactive" } : {}),
-      ...(search ? { title: { contains: search, mode: "insensitive" } } : {}),
-      ...(category
-        ? {
-            categories: {
-              some: {
-                category: {
-                  slug: category,
-                },
-              },
+  const where: any = {
+    ...(status ? { status: status as "active" | "inactive" } : {}),
+    ...(search
+      ? { title: { contains: search, mode: "insensitive" } }
+      : {}),
+    ...(category
+      ? {
+          categories: {
+            some: {
+              category: { slug: category },
             },
-          }
-        : {}),
-      ...(filter === "featured"
-        ? { discountEnabled: true }
-        : {}),
-    },
+          },
+        }
+      : {}),
+  };
+
+  // 🧠 ORDER
+  let orderBy: any = { createdAt: "desc" };
+
+  if (filter === "discount") {
+    where.discountEnabled = true;
+  }
+
+  if (filter === "newest") {
+    orderBy = { createdAt: "desc" };
+  }
+
+  if (filter === "oldest") {
+    orderBy = { createdAt: "asc" };
+  }
+
+  // 🔥 MAIN QUERY
+  const products = await prisma.product.findMany({
+    where,
+    orderBy,
     include: {
       images: { orderBy: [{ isPrimary: "desc" }, { order: "asc" }] },
       categories: { include: { category: true } },
-      variants: { orderBy: { order: "asc" } }, 
+      variants: { orderBy: { order: "asc" } },
     },
-    orderBy: { createdAt: "desc" },
   });
 
   return ok(products);
