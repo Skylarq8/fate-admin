@@ -3,10 +3,6 @@
     {
       "path": "/api/cron/cleanup-orders",
       "schedule": "0 0 * * *"
-    },
-    {
-      "path": "/api/cron/cleanup-promos",
-      "schedule": "0 * * * *"
     }
   ]
 }
