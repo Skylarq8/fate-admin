@@ -47,20 +47,37 @@ export async function POST(req: NextRequest) {
       return fail("Хувийн хөнгөлөлт 100-с хэтрэхгүй байх ёстой.");
     }
 
-    // ── Давхардал шалгах: энэ имэйлд идэвхтэй promo code байгаа эсэх ─────────
+    // ── Давхардал шалгах: идэвхтэй код байвал тэр кодыг дахин илгээнэ ─────────
     const existing = await prisma.coupon.findFirst({
       where: {
         sentToEmail: email.toLowerCase(),
-        usedCount: 0,           // ашиглагдаагүй
-        expiresAt: { gt: new Date() }, // хугацаа дуусаагүй
+        usedCount: 0,
+        expiresAt: { gt: new Date() },
       },
     });
 
-    if (existing) {
-      return fail(
-        `Энэ имэйл хаяг дээр аль хэдийн идэвхтэй промо код байна (${existing.code}). Дуусах хугацаа: ${existing.expiresAt?.toISOString()}.`,
-        409
-      );
+    if (existing && existing.expiresAt) {
+      const html = buildPromoEmailHtml({
+        code: existing.code,
+        discountValue: existing.discountValue,
+        discountType: existing.discountType as "percentage" | "fixed",
+        expiresAt: existing.expiresAt,
+      });
+
+      const resend = getResend();
+      const { error: mailError } = await resend.emails.send({
+        from: FROM_EMAIL,
+        to: email,
+        subject: `Таны хувийн ${existing.discountType === "percentage" ? existing.discountValue + "%" : existing.discountValue.toLocaleString() + "₮"} хөнгөлөлтийн код`,
+        html,
+      });
+
+      if (mailError) {
+        console.error("[promo/send] Resend error (resend existing):", mailError);
+        return fail("Имэйл илгээхэд алдаа гарлаа. Дахин оролдоно уу.", 500);
+      }
+
+      return ok({ message: "Промо код дахин илгээлээ.", expiresAt: existing.expiresAt });
     }
 
     // ── Unique code үүсгэх ────────────────────────────────────────────────────
