@@ -2,5 +2,5 @@
 export const USERS = [
   { username: "Admin", password: "Aminaa?777$" },
   { username: "Galaa", password: "1234" },
-  { username: "Manager", password: "1234" },
+  { username: "User", password: "1234" },
 ];
