@@ -146,12 +146,14 @@ model Coupon {
   expiresAt      DateTime?
   applyToAll     Boolean     @default(true)  // true = all products, false = specific products
   active         Boolean     @default(true)
+  sentToEmail    String?     // promo mail-аар явуулсан бол имэйл хаяг хадгална
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 
   products       CouponProduct[]
 
   @@index([code])
+  @@index([sentToEmail])
 }
 
 model CouponProduct {

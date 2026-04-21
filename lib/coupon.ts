@@ -88,10 +88,19 @@ export async function processCouponWithTransaction(
         throw new Error("Coupon ашигдсан хязгаарт хүрсэн");
       }
 
-      await tx.coupon.update({
+      const updated = await tx.coupon.update({
         where: { code: couponCode },
         data: { usedCount: { increment: 1 } },
       });
+
+      // Promo code (sentToEmail-тэй, usageLimit: 1) ашиглагдсан тохиолдолд устгана
+      const reachedLimit =
+        updated.usageLimit !== null &&
+        updated.usedCount >= updated.usageLimit;
+
+      if (reachedLimit && updated.sentToEmail) {
+        await tx.coupon.delete({ where: { id: updated.id } });
+      }
     });
 
     return { success: true, message: "Coupon ашигдсан" };
