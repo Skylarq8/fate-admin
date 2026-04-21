@@ -4,9 +4,27 @@ import { prisma } from "@/lib/prisma";
 import { ok, fail } from "@/lib/api-response";
 
 // ─── GET /api/coupons ─────────────────────────────────────────────────────────
-export async function GET() {
+// ?email=xxx    → тухайн имэйлд илгээсэн coupon-уудыг шүүнэ
+// ?active=true  → хугацаа дуусаагүй, ашиглагдаагүй coupon-уудыг шүүнэ
+export async function GET(req: NextRequest) {
   try {
+    const { searchParams } = new URL(req.url);
+    const email  = searchParams.get("email");
+    const active = searchParams.get("active");
+
+    const where: any = {};
+
+    if (email) {
+      where.sentToEmail = email.toLowerCase();
+    }
+
+    if (active === "true") {
+      where.usedCount = 0;
+      where.expiresAt = { gt: new Date() };
+    }
+
     const coupons = await prisma.coupon.findMany({
+      where,
       include: { products: { include: { product: true } } },
       orderBy: { createdAt: "desc" },
     });
@@ -41,6 +59,7 @@ export async function POST(req: NextRequest) {
       expiresAt,
       applyToAll,
       products,
+      email,
     } = body as {
       code: string;
       discountType: "percentage" | "fixed";
@@ -49,6 +68,7 @@ export async function POST(req: NextRequest) {
       expiresAt?: string;
       applyToAll?: boolean;
       products?: string[];
+      email?: string;
     };
 
     if (!code?.trim()) return fail("code шаардлагатай.");
@@ -81,6 +101,7 @@ export async function POST(req: NextRequest) {
         expiresAt: expiresAt ? new Date(expiresAt) : null,
         applyToAll: applyToAll ?? true,
         active: true,
+        sentToEmail: email ? email.toLowerCase() : null,
         products: !applyToAll && products
           ? { create: products.map((pid: string) => ({ productId: pid })) }
           : undefined,
