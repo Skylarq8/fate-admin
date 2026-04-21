@@ -11,7 +11,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail } from "@/lib/api-response";
-import { resend, buildPromoEmailHtml } from "@/lib/resend";
+import { getResend, buildPromoEmailHtml } from "@/lib/resend";
 
 const FROM_EMAIL = process.env.PROMO_FROM_EMAIL || "noreply@yourdomain.com";
 
@@ -98,6 +98,7 @@ export async function POST(req: NextRequest) {
       expiresAt,
     });
 
+    const resend = getResend();
     const { error: mailError } = await resend.emails.send({
       from: FROM_EMAIL,
       to: email,
