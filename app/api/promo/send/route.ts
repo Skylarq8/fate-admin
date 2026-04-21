@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
         return fail("Имэйл илгээхэд алдаа гарлаа. Дахин оролдоно уу.", 500);
       }
 
-      return ok({ message: "Промо код дахин илгээлээ.", expiresAt: existing.expiresAt });
+      return ok({ message: "Промо код дахин илгээлээ.", code: existing.code, expiresAt: existing.expiresAt });
     }
 
     // ── Unique code үүсгэх ────────────────────────────────────────────────────
@@ -131,7 +131,7 @@ export async function POST(req: NextRequest) {
     }
 
     console.log(`[promo/send] Promo code ${code} → ${email}`);
-    return ok({ message: "Промо код амжилттай илгээлээ.", expiresAt });
+    return ok({ message: "Промо код амжилттай илгээлээ.", code, expiresAt });
   } catch (err) {
     console.error("[promo/send] error:", err);
     return fail(String(err), 500);
